@@ -8,7 +8,7 @@ import os
 import sys
 import pandas as pd
 import openpyxl
-import openpyxl.utils  # 누락되었던 필수 하위 모듈 추가
+import openpyxl.utils  
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.cell.cell import MergedCell
@@ -621,9 +621,9 @@ def extract_section_smart(all_lines, start_kw, end_kw, mode="CFF(K)"):
             changed = False
             for gb in garbage_heads:
                 if txt.lower().replace(" ","").startswith(gb.lower().replace(" ","")):
-                      m = re.compile(r"^" + re.escape(gb).replace(r"\ ", r"\s*") + r"[\s\.:]*", re.IGNORECASE).match(txt)
-                      if m: txt = txt[m.end():].strip(); changed = True
-                      elif txt.lower().startswith(gb.lower()): txt = txt[len(gb):].strip(); changed = True
+                    m = re.compile(r"^" + re.escape(gb).replace(r"\ ", r"\s*") + r"[\s\.:]*", re.IGNORECASE).match(txt)
+                    if m: txt = txt[m.end():].strip(); changed = True
+                    elif txt.lower().startswith(gb.lower()): txt = txt[len(gb):].strip(); changed = True
             for pat in sensitive_garbage_regex:
                 m = re.search(pat, txt)
                 if m: txt = txt[m.end():].strip(); changed = True
