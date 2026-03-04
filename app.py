@@ -39,7 +39,7 @@ SESSION_KEYS = [
     'allergy_res_83', 'allergy_res_26', 'allergy_fname_83', 'allergy_fname_26',
     'ifra_res', 'ifra_fname',
     'msds_res', # 리스트 형태: [{'fname': '...', 'data': ...}]
-    'others_res', 'others_fname'
+    'others_res', 'others_fname', 'others_indiv' # 개별 파일 추가
 ]
 for k in SESSION_KEYS:
     if k not in st.session_state:
@@ -133,23 +133,32 @@ def logic_cff_83(input_df, template_path, customer_name, product_name):
 def logic_cff_26(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=43):
+    for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=48):
         for cell in row: cell.value = None
     source_data = {}
     for idx, row in input_df.iterrows():
         cas_text = row.iloc[5] if len(row) > 5 else None
         val = row.iloc[11] if len(row) > 11 else None
         for cas in extract_cas(cas_text): source_data[cas] = val
+        
+    has_value_18_48 = False
     for r in range(1, ws.max_row + 1):
         template_cas_text = ws.cell(row=r, column=2).value
         if template_cas_text:
             for t_cas in extract_cas(template_cas_text):
                 if t_cas in source_data:
                     ws.cell(row=r, column=3).value = source_data[t_cas]
+                    if 18 <= r <= 48:
+                        has_value_18_48 = True
                     break
+                    
+    if not has_value_18_48:
+        for r in range(18, 49):
+            ws.cell(row=r, column=3).value = 0
+
     ws['B11'] = customer_name; ws['B12'] = product_name; ws['E13'] = datetime.now().strftime("%Y-%m-%d")
     align_center = Alignment(horizontal='center', vertical='center')
-    for row in ws.iter_rows(min_col=3, max_col=6, min_row=18, max_row=43):
+    for row in ws.iter_rows(min_col=3, max_col=6, min_row=18, max_row=48):
         for cell in row: cell.alignment = align_center
     return wb
 
@@ -180,13 +189,15 @@ def logic_hp_83(input_df, template_path, customer_name, product_name):
 def logic_hp_26(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=43):
+    for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=48):
         for cell in row: cell.value = None
     source_data = {}
     for idx, row in input_df.iterrows():
         cas_text = row.iloc[1] if len(row) > 1 else None
         val = row.iloc[2] if len(row) > 2 else None
         for cas in extract_cas(cas_text): source_data[cas] = val
+        
+    has_value_18_48 = False
     for r in range(1, ws.max_row + 1):
         template_cas_text = ws.cell(row=r, column=2).value
         if template_cas_text:
@@ -195,10 +206,17 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
                     val_to_insert = source_data[t_cas]
                     if pd.notna(val_to_insert) and str(val_to_insert).strip() not in ['0', '0.0']:
                         ws.cell(row=r, column=3).value = val_to_insert
+                        if 18 <= r <= 48:
+                            has_value_18_48 = True
                     break
+                    
+    if not has_value_18_48:
+        for r in range(18, 49):
+            ws.cell(row=r, column=3).value = 0
+
     ws['B11'] = customer_name; ws['B12'] = product_name; ws['E13'] = datetime.now().strftime("%Y-%m-%d")
     align_center = Alignment(horizontal='center', vertical='center')
-    for row in ws.iter_rows(min_col=3, max_col=6, min_row=18, max_row=43):
+    for row in ws.iter_rows(min_col=3, max_col=6, min_row=18, max_row=48):
         for cell in row: cell.alignment = align_center
     return wb
 
@@ -1374,9 +1392,10 @@ def process_others(customer_name, product_name):
     current_date = f"{english_months[current_time.month - 1]} {current_time.strftime('%d, %Y')}"
     
     template_dir = get_resource_path("OTHERS templates")
-    if not os.path.exists(template_dir): return None, f"'{template_dir}' 폴더를 찾을 수 없습니다."
+    if not os.path.exists(template_dir): return None, f"'{template_dir}' 폴더를 찾을 수 없습니다.", None
     
     zip_buffer = io.BytesIO()
+    individual_files = []
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for filename in os.listdir(template_dir):
             if filename.endswith(".docx") and not filename.startswith("~"):
@@ -1387,11 +1406,15 @@ def process_others(customer_name, product_name):
                     doc_io = io.BytesIO()
                     doc.save(doc_io)
                     doc_io.seek(0)
-                    zip_file.writestr(filename.replace("STH", product_name), doc_io.read())
+                    
+                    new_name = filename.replace("STH", product_name)
+                    doc_bytes = doc_io.read()
+                    zip_file.writestr(new_name, doc_bytes)
+                    individual_files.append((new_name, doc_bytes))
                 except Exception:
                     pass
     zip_buffer.seek(0)
-    return zip_buffer, f"Documents_{customer_name}_{product_name}.zip"
+    return zip_buffer, f"Documents_{customer_name}_{product_name}.zip", individual_files
 
 # ==============================================================================
 # [UI 레이아웃 구성]
@@ -1408,7 +1431,6 @@ with col_top2:
 with col_top3:
     st.write("")
     batch_run = st.button("🌟 일괄 변환 실행", use_container_width=True)
-    include_others = st.checkbox("일괄 변환 시 OTHERS 포함", value=True)
 
 st.divider()
 
@@ -1430,8 +1452,10 @@ with col1_2:
                     st.success("변환 성공!")
                 except Exception as e: st.error(f"오류: {e}")
 with col1_3:
+    st.subheader("결과물 다운로드")
     if st.session_state['spec_res']:
-        st.download_button("📥 결과물 다운로드", data=st.session_state['spec_res'], file_name=st.session_state['spec_fname'], mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key="dl_spec")
+        st.markdown(f"📄 **{st.session_state['spec_fname']}**")
+        st.download_button("📥 다운로드", data=st.session_state['spec_res'], file_name=st.session_state['spec_fname'], mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key="dl_spec")
 
 st.divider()
 
@@ -1462,9 +1486,12 @@ with col2_2:
                     st.success("변환 성공!")
                 except Exception as e: st.error(f"오류: {e}")
 with col2_3:
+    st.subheader("결과물 다운로드")
     if st.session_state['allergy_res_83'] and st.session_state['allergy_res_26']:
-        st.download_button(f"📥 {st.session_state['allergy_fname_83']} 다운로드", data=st.session_state['allergy_res_83'], file_name=st.session_state['allergy_fname_83'], mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_al_83")
-        st.download_button(f"📥 {st.session_state['allergy_fname_26']} 다운로드", data=st.session_state['allergy_res_26'], file_name=st.session_state['allergy_fname_26'], mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_al_26")
+        st.markdown(f"📄 **{st.session_state['allergy_fname_83']}**")
+        st.download_button("📥 다운로드", data=st.session_state['allergy_res_83'], file_name=st.session_state['allergy_fname_83'], mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_al_83")
+        st.markdown(f"📄 **{st.session_state['allergy_fname_26']}**")
+        st.download_button("📥 다운로드", data=st.session_state['allergy_res_26'], file_name=st.session_state['allergy_fname_26'], mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_al_26")
 
 st.divider()
 
@@ -1486,8 +1513,10 @@ with col3_2:
                     st.success("변환 성공!")
                 except Exception as e: st.error(f"오류: {e}")
 with col3_3:
+    st.subheader("결과물 다운로드")
     if st.session_state['ifra_res']:
-        st.download_button("📥 결과물 다운로드", data=st.session_state['ifra_res'], file_name=st.session_state['ifra_fname'], mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key="dl_ifra")
+        st.markdown(f"📄 **{st.session_state['ifra_fname']}**")
+        st.download_button("📥 다운로드", data=st.session_state['ifra_res'], file_name=st.session_state['ifra_fname'], mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key="dl_ifra")
 
 st.divider()
 
@@ -1520,9 +1549,11 @@ with col4_2:
                     st.session_state['msds_res'] = [{'fname': f, 'data': res_dict["data"][f]} for f in res_dict["files"]]
                     st.success("변환 성공!")
 with col4_3:
+    st.subheader("결과물 다운로드")
     if st.session_state['msds_res']:
         for i, item in enumerate(st.session_state['msds_res']):
-            st.download_button(f"📥 {item['fname']} 다운로드", data=item['data'], file_name=item['fname'], mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_msds_{i}")
+            st.markdown(f"📄 **{item['fname']}**")
+            st.download_button("📥 다운로드", data=item['data'], file_name=item['fname'], mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_msds_{i}")
 
 st.divider()
 
@@ -1536,16 +1567,23 @@ with col5_2:
         if not global_customer or not global_product: st.warning("상단의 고객사명과 제품명을 모두 입력해주세요.")
         else:
             with st.spinner("OTHERS 변환 중..."):
-                res, info = process_others(global_customer, global_product)
+                res, info, indiv = process_others(global_customer, global_product)
                 if res:
                     st.session_state['others_res'] = res.getvalue()
                     st.session_state['others_fname'] = info
+                    st.session_state['others_indiv'] = indiv
                     st.success("변환 성공!")
                 else:
                     st.error(info)
 with col5_3:
+    st.subheader("결과물 다운로드")
     if st.session_state['others_res']:
-        st.download_button("📥 ZIP 파일 다운로드", data=st.session_state['others_res'], file_name=st.session_state['others_fname'], mime="application/zip", use_container_width=True, key="dl_others")
+        st.markdown(f"📦 **{st.session_state['others_fname']}**")
+        st.download_button("📥 ZIP 전체 다운로드", data=st.session_state['others_res'], file_name=st.session_state['others_fname'], mime="application/zip", use_container_width=True, key="dl_others_zip")
+        st.write("---")
+        for idx, (f_name, f_data) in enumerate(st.session_state['others_indiv']):
+            st.markdown(f"📄 **{f_name}**")
+            st.download_button("📥 개별 다운로드", data=f_data, file_name=f_name, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key=f"dl_oth_indiv_{idx}")
 
 # ==============================================================================
 # [일괄 변환 트리거]
@@ -1593,12 +1631,12 @@ if batch_run:
                 if "error" in res_dict: st.error(f"MSDS 일괄 변환 오류: {res_dict['error']}")
                 else: st.session_state['msds_res'] = [{'fname': f, 'data': res_dict["data"][f]} for f in res_dict["files"]]
 
-            # 5. OTHERS
-            if include_others:
-                res, info = process_others(global_customer, global_product)
-                if res:
-                    st.session_state['others_res'] = res.getvalue(); st.session_state['others_fname'] = info
-                else: st.error(f"OTHERS 일괄 변환 오류: {info}")
+            # 5. OTHERS (일괄 변환 시 항상 포함되도록 로직 수정)
+            res, info, indiv = process_others(global_customer, global_product)
+            if res:
+                st.session_state['others_res'] = res.getvalue()
+                st.session_state['others_fname'] = info
+                st.session_state['others_indiv'] = indiv
+            else: st.error(f"OTHERS 일괄 변환 오류: {info}")
             
-            st.success("✅ 파일이 첨부된 모든 항목의 일괄 변환이 완료되었습니다. 각 섹션의 우측에서 결과를 다운로드하세요!")
-            st.rerun() # UI 리프레시를 위해 재실행
+            st.success("✅ 파일이 첨부된 모든 항목 및 OTHERS 양식의 일괄 변환이 완료되었습니다. 각 섹션의 우측에서 결과를 다운로드하세요!")
