@@ -143,7 +143,6 @@ def logic_cff_26(input_df, template_path, customer_name, product_name):
         val = row.iloc[11] if len(row) > 11 else None
         for cas in extract_cas(cas_text): source_data[cas] = val
         
-    has_inserted_18_43 = False
     for r in range(1, ws.max_row + 1):
         template_cas_text = ws.cell(row=r, column=2).value
         if template_cas_text:
@@ -151,14 +150,24 @@ def logic_cff_26(input_df, template_path, customer_name, product_name):
                 if t_cas in source_data:
                     target = ws.cell(row=r, column=3)
                     if not isinstance(target, MergedCell): target.value = source_data[t_cas]
-                    if 18 <= r <= 43:
-                        has_inserted_18_43 = True
                     break
                     
-    if not has_inserted_18_43:
+    # C18:43 범위에 숫자가 하나라도 있는지 검사
+    has_num = False
+    for r in range(18, 44):
+        val = ws.cell(row=r, column=3).value
+        if val is not None and str(val).strip() != "":
+            if any(char.isdigit() for char in str(val)):
+                has_num = True
+                break
+
+    # 숫자가 하나도 없다면 C18:43 범위를 모두 0으로 덮어씀
+    if not has_num:
         for r in range(18, 44):
             target = ws.cell(row=r, column=3)
-            if not isinstance(target, MergedCell): target.value = 0
+            try:
+                if not isinstance(target, MergedCell): target.value = 0
+            except: pass
 
     ws['B11'] = customer_name; ws['B12'] = product_name; ws['E13'] = datetime.now().strftime("%Y-%m-%d")
     align_center = Alignment(horizontal='center', vertical='center')
@@ -204,7 +213,6 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
         val = row.iloc[2] if len(row) > 2 else None
         for cas in extract_cas(cas_text): source_data[cas] = val
         
-    has_inserted_18_43 = False
     for r in range(1, ws.max_row + 1):
         template_cas_text = ws.cell(row=r, column=2).value
         if template_cas_text:
@@ -214,14 +222,24 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
                     if pd.notna(val_to_insert) and str(val_to_insert).strip() not in ['0', '0.0']:
                         target = ws.cell(row=r, column=3)
                         if not isinstance(target, MergedCell): target.value = val_to_insert
-                        if 18 <= r <= 43:
-                            has_inserted_18_43 = True
                     break
                     
-    if not has_inserted_18_43:
+    # C18:43 범위에 숫자가 하나라도 있는지 검사
+    has_num = False
+    for r in range(18, 44):
+        val = ws.cell(row=r, column=3).value
+        if val is not None and str(val).strip() != "":
+            if any(char.isdigit() for char in str(val)):
+                has_num = True
+                break
+
+    # 숫자가 하나도 없다면 C18:43 범위를 모두 0으로 덮어씀
+    if not has_num:
         for r in range(18, 44):
             target = ws.cell(row=r, column=3)
-            if not isinstance(target, MergedCell): target.value = 0
+            try:
+                if not isinstance(target, MergedCell): target.value = 0
+            except: pass
 
     ws['B11'] = customer_name; ws['B12'] = product_name; ws['E13'] = datetime.now().strftime("%Y-%m-%d")
     align_center = Alignment(horizontal='center', vertical='center')
@@ -1558,7 +1576,7 @@ with col4_2:
         msds_kor_ver = st.radio("국문 양식 버전", ["신버전", "구버전"], key="msds_kor_ver")
 
     if st.button("MSDS 변환", use_container_width=True):
-        if not msds_up or not global_customer or not global_product: st.warning("원본 파일, 고객사명, 제품명을 모두 입력해주세요.")
+        if not msds_up or not global_customer or not global_product: st.warning("고객사명, 제품명, 원본 파일을 모두 입력해주세요.")
         else:
             with st.spinner("MSDS 변환 중..."):
                 res_dict = process_msds(msds_up, global_product, msds_mode, msds_ri, msds_kor_file, msds_kor_ver)
