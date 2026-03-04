@@ -143,7 +143,6 @@ def logic_cff_26(input_df, template_path, customer_name, product_name):
         val = row.iloc[11] if len(row) > 11 else None
         for cas in extract_cas(cas_text): source_data[cas] = val
         
-    has_value_18_43 = False
     for r in range(1, ws.max_row + 1):
         template_cas_text = ws.cell(row=r, column=2).value
         if template_cas_text:
@@ -151,11 +150,16 @@ def logic_cff_26(input_df, template_path, customer_name, product_name):
                 if t_cas in source_data:
                     target = ws.cell(row=r, column=3)
                     if not isinstance(target, MergedCell): target.value = source_data[t_cas]
-                    if 18 <= r <= 43:
-                        has_value_18_43 = True
                     break
                     
-    if not has_value_18_43:
+    has_val = False
+    for r in range(18, 44):
+        val = ws.cell(row=r, column=3).value
+        if val is not None and str(val).strip() != "":
+            has_val = True
+            break
+            
+    if not has_val:
         for r in range(18, 44):
             target = ws.cell(row=r, column=3)
             if not isinstance(target, MergedCell): target.value = 0
@@ -204,7 +208,6 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
         val = row.iloc[2] if len(row) > 2 else None
         for cas in extract_cas(cas_text): source_data[cas] = val
         
-    has_value_18_43 = False
     for r in range(1, ws.max_row + 1):
         template_cas_text = ws.cell(row=r, column=2).value
         if template_cas_text:
@@ -214,11 +217,16 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
                     if pd.notna(val_to_insert) and str(val_to_insert).strip() not in ['0', '0.0']:
                         target = ws.cell(row=r, column=3)
                         if not isinstance(target, MergedCell): target.value = val_to_insert
-                        if 18 <= r <= 43:
-                            has_value_18_43 = True
                     break
                     
-    if not has_value_18_43:
+    has_val = False
+    for r in range(18, 44):
+        val = ws.cell(row=r, column=3).value
+        if val is not None and str(val).strip() != "":
+            has_val = True
+            break
+            
+    if not has_val:
         for r in range(18, 44):
             target = ws.cell(row=r, column=3)
             if not isinstance(target, MergedCell): target.value = 0
@@ -1300,6 +1308,10 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                                 cell_a.alignment = ALIGN_TITLE
                             except: pass
                     except: pass
+                    
+                for r in list(range(125, 130)) + list(range(132, 135)) + [139, 140, 143, 144]:
+                    try: dest_ws.cell(row=r, column=1).alignment = ALIGN_LEFT
+                    except: pass
 
                 s8 = parsed_data["sec8"]
                 val148 = s8["B148"].replace("해당없음", "자료없음")
@@ -1536,7 +1548,7 @@ st.divider()
 col4_1, col4_2, col4_3 = st.columns(3)
 with col4_1:
     st.subheader("4. MSDS 양식 변환")
-    msds_up = st.file_uploader("원본 PDF 업로드 (다중 선택 가능)", type=["pdf"], accept_multiple_files=True, key="msds_up")
+    msds_up = st.file_uploader("원본 PDF 업로드", type=["pdf"], accept_multiple_files=True, key="msds_up")
 with col4_2:
     st.subheader(" ")
     msds_mode = st.selectbox("모드 선택", ["CFF(K)", "CFF(E)", "HP(K)", "HP(E)"], key="msds_mode")
