@@ -134,7 +134,7 @@ def logic_cff_83(input_df, template_path, customer_name, product_name):
 def logic_cff_26(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=48):
+    for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=43):
         for cell in row: 
             if not isinstance(cell, MergedCell): cell.value = None
     source_data = {}
@@ -143,7 +143,7 @@ def logic_cff_26(input_df, template_path, customer_name, product_name):
         val = row.iloc[11] if len(row) > 11 else None
         for cas in extract_cas(cas_text): source_data[cas] = val
         
-    has_value_18_48 = False
+    has_value_18_43 = False
     for r in range(1, ws.max_row + 1):
         template_cas_text = ws.cell(row=r, column=2).value
         if template_cas_text:
@@ -151,18 +151,18 @@ def logic_cff_26(input_df, template_path, customer_name, product_name):
                 if t_cas in source_data:
                     target = ws.cell(row=r, column=3)
                     if not isinstance(target, MergedCell): target.value = source_data[t_cas]
-                    if 18 <= r <= 48:
-                        has_value_18_48 = True
+                    if 18 <= r <= 43:
+                        has_value_18_43 = True
                     break
                     
-    if not has_value_18_48:
-        for r in range(18, 49):
+    if not has_value_18_43:
+        for r in range(18, 44):
             target = ws.cell(row=r, column=3)
             if not isinstance(target, MergedCell): target.value = 0
 
     ws['B11'] = customer_name; ws['B12'] = product_name; ws['E13'] = datetime.now().strftime("%Y-%m-%d")
     align_center = Alignment(horizontal='center', vertical='center')
-    for row in ws.iter_rows(min_col=3, max_col=6, min_row=18, max_row=48):
+    for row in ws.iter_rows(min_col=3, max_col=6, min_row=18, max_row=43):
         for cell in row: 
             if not isinstance(cell, MergedCell): cell.alignment = align_center
     return wb
@@ -195,7 +195,7 @@ def logic_hp_83(input_df, template_path, customer_name, product_name):
 def logic_hp_26(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=48):
+    for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=43):
         for cell in row: 
             if not isinstance(cell, MergedCell): cell.value = None
     source_data = {}
@@ -204,7 +204,7 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
         val = row.iloc[2] if len(row) > 2 else None
         for cas in extract_cas(cas_text): source_data[cas] = val
         
-    has_value_18_48 = False
+    has_value_18_43 = False
     for r in range(1, ws.max_row + 1):
         template_cas_text = ws.cell(row=r, column=2).value
         if template_cas_text:
@@ -214,18 +214,18 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
                     if pd.notna(val_to_insert) and str(val_to_insert).strip() not in ['0', '0.0']:
                         target = ws.cell(row=r, column=3)
                         if not isinstance(target, MergedCell): target.value = val_to_insert
-                        if 18 <= r <= 48:
-                            has_value_18_48 = True
+                        if 18 <= r <= 43:
+                            has_value_18_43 = True
                     break
                     
-    if not has_value_18_48:
-        for r in range(18, 49):
+    if not has_value_18_43:
+        for r in range(18, 44):
             target = ws.cell(row=r, column=3)
             if not isinstance(target, MergedCell): target.value = 0
 
     ws['B11'] = customer_name; ws['B12'] = product_name; ws['E13'] = datetime.now().strftime("%Y-%m-%d")
     align_center = Alignment(horizontal='center', vertical='center')
-    for row in ws.iter_rows(min_col=3, max_col=6, min_row=18, max_row=48):
+    for row in ws.iter_rows(min_col=3, max_col=6, min_row=18, max_row=43):
         for cell in row: 
             if not isinstance(cell, MergedCell): cell.alignment = align_center
     return wb
@@ -1424,7 +1424,7 @@ def process_others(customer_name, product_name):
 # ==============================================================================
 # [UI 레이아웃 구성]
 # ==============================================================================
-st.title("📄 통합 문서 양식 자동 변환기")
+st.title("📄 아로마준 통합 양식 변환기")
 
 # --- 공통 정보 및 일괄 변환 ---
 st.subheader("공통 정보 입력")
@@ -1440,11 +1440,12 @@ with col_top3:
 st.divider()
 
 # --- Section 1: SPEC ---
-st.subheader("1. SPEC 양식 변환")
 col1_1, col1_2, col1_3 = st.columns(3)
 with col1_1:
+    st.subheader("1. SPEC 양식 변환")
     spec_up = st.file_uploader("원본 PDF 업로드", type=["pdf"], key="spec_up")
 with col1_2:
+    st.subheader(" ")
     spec_mode = st.selectbox("모드 선택", ["CFF", "HP"], key="spec_mode")
     if st.button("SPEC 변환", use_container_width=True):
         if not spec_up or not global_product: st.warning("원본 파일과 제품명을 입력해주세요.")
@@ -1466,12 +1467,13 @@ with col1_3:
 st.divider()
 
 # --- Section 2: ALLERGY ---
-st.subheader("2. ALLERGY 양식 변환")
 col2_1, col2_2, col2_3 = st.columns(3)
 with col2_1:
+    st.subheader("2. ALLERGY 양식 변환")
     allergy_up = st.file_uploader("원본 Excel 업로드", type=['xlsx', 'xls'], key="allergy_up")
 with col2_2:
-    allergy_mode = st.selectbox("업체 타입 선택", ["CFF", "HP"], key="allergy_mode")
+    st.subheader(" ")
+    allergy_mode = st.selectbox("모드 선택", ["CFF", "HP"], key="allergy_mode")
     if st.button("ALLERGY 변환", use_container_width=True):
         if not allergy_up or not global_customer or not global_product: st.warning("원본 파일, 고객사명, 제품명을 모두 입력해주세요.")
         else:
@@ -1504,11 +1506,12 @@ with col2_3:
 st.divider()
 
 # --- Section 3: IFRA ---
-st.subheader("3. IFRA 양식 변환")
 col3_1, col3_2, col3_3 = st.columns(3)
 with col3_1:
+    st.subheader("3. IFRA 양식 변환")
     ifra_up = st.file_uploader("원본 PDF 업로드", type=["pdf"], key="ifra_up")
 with col3_2:
+    st.subheader(" ")
     ifra_mode = st.selectbox("모드 선택", ["CFF", "HP"], key="ifra_mode")
     if st.button("IFRA 변환", use_container_width=True):
         if not ifra_up or not global_customer or not global_product: st.warning("원본 파일, 고객사명, 제품명을 모두 입력해주세요.")
@@ -1530,11 +1533,12 @@ with col3_3:
 st.divider()
 
 # --- Section 4: MSDS ---
-st.subheader("4. MSDS 양식 변환")
 col4_1, col4_2, col4_3 = st.columns(3)
 with col4_1:
+    st.subheader("4. MSDS 양식 변환")
     msds_up = st.file_uploader("원본 PDF 업로드 (다중 선택 가능)", type=["pdf"], accept_multiple_files=True, key="msds_up")
 with col4_2:
+    st.subheader(" ")
     msds_mode = st.selectbox("모드 선택", ["CFF(K)", "CFF(E)", "HP(K)", "HP(E)"], key="msds_mode")
     msds_ri = ""
     msds_kor_file = None
@@ -1568,15 +1572,16 @@ with col4_3:
 st.divider()
 
 # --- Section 5: OTHERS ---
-st.subheader("5. 원본 불필요 파일 (OTHERS) 변환")
 col5_1, col5_2, col5_3 = st.columns(3)
 with col5_1:
-    st.info("이 양식은 원본 파일 첨부가 필요 없으며, 입력한 고객사명과 제품명으로 templates 폴더 내 모든 파일이 일괄 생성됩니다.")
+    st.subheader("5. 기타(원본 불필요) 양식 변환")
+    st.info("이 양식은 원본 파일 첨부가 필요 없으며, 입력한 고객사명과 제품명으로 모든 파일이 ZIP 형식으로 일괄 생성됩니다.")
 with col5_2:
-    if st.button("OTHERS 변환", use_container_width=True):
+    st.subheader(" ")
+    if st.button("기타 변환", use_container_width=True):
         if not global_customer or not global_product: st.warning("상단의 고객사명과 제품명을 모두 입력해주세요.")
         else:
-            with st.spinner("OTHERS 변환 중..."):
+            with st.spinner("기타 양식 변환 중..."):
                 res, info = process_others(global_customer, global_product)
                 if res:
                     st.session_state['others_res'] = res.getvalue()
