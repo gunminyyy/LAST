@@ -143,6 +143,7 @@ def logic_cff_26(input_df, template_path, customer_name, product_name):
         val = row.iloc[11] if len(row) > 11 else None
         for cas in extract_cas(cas_text): source_data[cas] = val
         
+    has_inserted_18_43 = False
     for r in range(1, ws.max_row + 1):
         template_cas_text = ws.cell(row=r, column=2).value
         if template_cas_text:
@@ -150,16 +151,11 @@ def logic_cff_26(input_df, template_path, customer_name, product_name):
                 if t_cas in source_data:
                     target = ws.cell(row=r, column=3)
                     if not isinstance(target, MergedCell): target.value = source_data[t_cas]
+                    if 18 <= r <= 43:
+                        has_inserted_18_43 = True
                     break
                     
-    has_val = False
-    for r in range(18, 44):
-        val = ws.cell(row=r, column=3).value
-        if val is not None and str(val).strip() != "":
-            has_val = True
-            break
-            
-    if not has_val:
+    if not has_inserted_18_43:
         for r in range(18, 44):
             target = ws.cell(row=r, column=3)
             if not isinstance(target, MergedCell): target.value = 0
@@ -208,6 +204,7 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
         val = row.iloc[2] if len(row) > 2 else None
         for cas in extract_cas(cas_text): source_data[cas] = val
         
+    has_inserted_18_43 = False
     for r in range(1, ws.max_row + 1):
         template_cas_text = ws.cell(row=r, column=2).value
         if template_cas_text:
@@ -217,16 +214,11 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
                     if pd.notna(val_to_insert) and str(val_to_insert).strip() not in ['0', '0.0']:
                         target = ws.cell(row=r, column=3)
                         if not isinstance(target, MergedCell): target.value = val_to_insert
+                        if 18 <= r <= 43:
+                            has_inserted_18_43 = True
                     break
                     
-    has_val = False
-    for r in range(18, 44):
-        val = ws.cell(row=r, column=3).value
-        if val is not None and str(val).strip() != "":
-            has_val = True
-            break
-            
-    if not has_val:
+    if not has_inserted_18_43:
         for r in range(18, 44):
             target = ws.cell(row=r, column=3)
             if not isinstance(target, MergedCell): target.value = 0
@@ -1310,7 +1302,9 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                     except: pass
                     
                 for r in list(range(125, 130)) + list(range(132, 135)) + [139, 140, 143, 144]:
-                    try: dest_ws.cell(row=r, column=1).alignment = ALIGN_LEFT
+                    try: 
+                        c_a = dest_ws.cell(row=r, column=1)
+                        if not isinstance(c_a, MergedCell): c_a.alignment = ALIGN_LEFT
                     except: pass
 
                 s8 = parsed_data["sec8"]
@@ -1564,7 +1558,7 @@ with col4_2:
         msds_kor_ver = st.radio("국문 양식 버전", ["신버전", "구버전"], key="msds_kor_ver")
 
     if st.button("MSDS 변환", use_container_width=True):
-        if not msds_up: st.warning("원본 파일을 하나 이상 업로드해주세요.")
+        if not msds_up or not global_customer or not global_product: st.warning("원본 파일, 고객사명, 제품명을 모두 입력해주세요.")
         else:
             with st.spinner("MSDS 변환 중..."):
                 res_dict = process_msds(msds_up, global_product, msds_mode, msds_ri, msds_kor_file, msds_kor_ver)
@@ -1661,5 +1655,5 @@ if batch_run:
                 st.session_state['others_fname'] = info
             else: st.error(f"OTHERS 일괄 변환 오류: {info}")
             
-            st.success("✅ 파일이 첨부된 모든 항목 및 OTHERS 양식의 일괄 변환이 완료되었습니다. 각 섹션의 우측에서 결과를 다운로드하세요!")
+            st.success("✅ 파일이 첨부된 모든 항목 및 기타 양식의 일괄 변환이 완료되었습니다. 각 섹션의 우측에서 결과를 다운로드하세요!")
             st.rerun() # UI 리프레시를 위해 재실행
