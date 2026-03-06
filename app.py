@@ -1599,7 +1599,7 @@ st.divider()
 col5_1, col5_2, col5_3 = st.columns(3)
 with col5_1:
     st.subheader("5. 기타(원본 불필요) 양식 변환")
-    st.info("이 양식은 원본 파일 첨부가 필요 없으며, 입력한 고객사명과 제품명으로 모든 파일이 ZIP 형식으로 일괄 생성됩니다.")
+    st.info("이 양식은 원본 파일 첨부가 필요 없으며, 입력한 고객사명과 제품명만 참고하여 모든 파일이 ZIP 형식으로 일괄 생성됩니다.")
 with col5_2:
     st.subheader(" ")
     if st.button("기타 변환", use_container_width=True):
@@ -1675,3 +1675,4 @@ if batch_run:
             
             st.success("✅ 파일이 첨부된 모든 항목 및 기타 양식의 일괄 변환이 완료되었습니다. 각 섹션의 우측에서 결과를 다운로드하세요!")
             st.rerun() # UI 리프레시를 위해 재실행
+
