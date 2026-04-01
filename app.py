@@ -44,10 +44,7 @@ st.markdown("""
     [data-testid="stFileUploaderFileData"] { display: none; }
     div[data-testid="stHorizontalBlock"] div div div div { display: block !important; width: 100% !important; }
     
-    /* 2. 모드 선택(Selectbox) 클릭 시 타자 입력 커서 숨김 및 글자 위아래 쏠림 방지 */
-    div[data-baseweb="select"] > div {
-        align-items: center !important; 
-    }
+    /* 2. 모드 선택(Selectbox) 클릭 시 타자 입력 커서 숨김 및 글자 위아래 쏠림(잘림) 방지 */
     div[data-baseweb="select"] input {
         caret-color: transparent !important;
         cursor: pointer !important;
@@ -58,7 +55,7 @@ st.markdown("""
         white-space: nowrap !important;
     }
     
-    /* 4. 기타 양식(OTHERS) 체크박스 줄바꿈 방지 및 동일 간격 설정 */
+    /* 4. 기타 양식 긴 텍스트(ASEAN 등) 줄바꿈 방지로 상하 간격 동일하게 유지 */
     div[data-testid="stCheckbox"] label p {
         white-space: nowrap !important;
         overflow: hidden !important;
