@@ -27,23 +27,40 @@ from streamlit_sortables import sort_items
 # ==============================================================================
 st.set_page_config(page_title="통합 양식 변환 및 검토 시스템", layout="wide")
 
-# [CSS] 파일 업로더 레이아웃 및 업로드 목록 숨김 처리
+# [CSS] 파일 업로더 레이아웃 및 업로드 목록 숨김 처리, UI 디테일 수정
 st.markdown("""
     <style>
+    /* 1. 파일 업로더 폭과 높이를 버튼과 안내 텍스트에 딱 맞게 슬림하게 축소 */
     [data-testid="stFileUploader"] { width: 100%; }
-    /* 수평(x축) 왼쪽, 수직(y축) 가운데 정렬 속성 변경 */
     [data-testid="stFileUploaderDropzone"] { 
-        padding: 1rem; 
-        min-height: 150px; 
+        padding: 0.5rem 1rem !important; 
+        min-height: auto !important; 
         display: flex; 
         flex-direction: column; 
         justify-content: center; 
         align-items: flex-start; 
     }
-    /* 기본 업로더 아래에 생기는 지저분한 파일 목록을 숨깁니다 */
     [data-testid="stFileUploaderFileName"] { display: none; }
     [data-testid="stFileUploaderFileData"] { display: none; }
     div[data-testid="stHorizontalBlock"] div div div div { display: block !important; width: 100% !important; }
+    
+    /* 2. 모드 선택(Selectbox) 클릭 시 타자 입력 커서 숨김 및 방지 */
+    div[data-baseweb="select"] input {
+        caret-color: transparent !important;
+        cursor: pointer !important;
+    }
+    
+    /* 3. 신버전/구버전 라디오 버튼 글씨 줄바꿈 방지 */
+    div[role="radiogroup"] label {
+        white-space: nowrap !important;
+    }
+    
+    /* 4. 기타 양식 긴 텍스트(ASEAN 등) 줄바꿈 방지로 상하 간격 동일하게 유지 */
+    div[data-testid="stCheckbox"] label p {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1760,7 +1777,8 @@ with col4_2:
     if "E" in global_mode:
         st.info("💡 영문 양식 생성 시 국문 파일 첨부")
         msds_kor_file = st.file_uploader("국문 엑셀 파일", type="xlsx", key="msds_kor_file")
-        msds_kor_ver = st.radio("국문 양식 버전", ["신버전", "구버전"], key="msds_kor_ver")
+        # [수정] 라디오 버튼 텍스트 가로 정렬 강제 적용
+        msds_kor_ver = st.radio("국문 양식 버전", ["신버전", "구버전"], horizontal=True, key="msds_kor_ver")
 
     if st.button("MSDS 변환", use_container_width=True):
         if not msds_up or not global_customer or not global_product: st.warning("고객사명, 제품명, 원본 파일을 모두 입력해주세요.")
