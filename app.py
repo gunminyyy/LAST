@@ -44,7 +44,10 @@ st.markdown("""
     [data-testid="stFileUploaderFileData"] { display: none; }
     div[data-testid="stHorizontalBlock"] div div div div { display: block !important; width: 100% !important; }
     
-    /* 2. 모드 선택(Selectbox) 클릭 시 타자 입력 커서 숨김 및 방지 */
+    /* 2. 모드 선택(Selectbox) 클릭 시 타자 입력 커서 숨김 및 글자 위아래 쏠림 방지 */
+    div[data-baseweb="select"] > div {
+        align-items: center !important; 
+    }
     div[data-baseweb="select"] input {
         caret-color: transparent !important;
         cursor: pointer !important;
@@ -55,11 +58,24 @@ st.markdown("""
         white-space: nowrap !important;
     }
     
-    /* 4. 기타 양식 긴 텍스트(ASEAN 등) 줄바꿈 방지로 상하 간격 동일하게 유지 */
+    /* 4. 기타 양식(OTHERS) 체크박스 줄바꿈 방지 및 동일 간격 설정 */
     div[data-testid="stCheckbox"] label p {
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
+    }
+    div[data-testid="stCheckbox"] {
+        min-height: auto !important;
+    }
+    div.row-widget.stCheckbox {
+        margin-top: -5px !important;
+        margin-bottom: -5px !important;
+    }
+    
+    /* 5. 기타 양식 체크박스 선택 시 글씨 색상 빨간색으로 변경 */
+    div[data-testid="stCheckbox"] label input[type="checkbox"]:checked ~ div p {
+        color: red !important;
+        font-weight: bold !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1777,7 +1793,6 @@ with col4_2:
     if "E" in global_mode:
         st.info("💡 영문 양식 생성 시 국문 파일 첨부")
         msds_kor_file = st.file_uploader("국문 엑셀 파일", type="xlsx", key="msds_kor_file")
-        # [수정] 라디오 버튼 텍스트 가로 정렬 강제 적용
         msds_kor_ver = st.radio("국문 양식 버전", ["신버전", "구버전"], horizontal=True, key="msds_kor_ver")
 
     if st.button("MSDS 변환", use_container_width=True):
@@ -1813,11 +1828,9 @@ with col5_1:
     
     selected_others = []
     if available_others:
-        cols = st.columns(2)
         for i, f in enumerate(available_others):
-            with cols[i % 2]:
-                if st.checkbox(f.replace(".docx", ""), key=f"chk_other_{i}"):
-                    selected_others.append(f)
+            if st.checkbox(f.replace(".docx", ""), key=f"chk_other_{i}"):
+                selected_others.append(f)
     else:
         st.warning("OTHERS templates 폴더에 변환 가능한 파일이 없습니다.")
 
