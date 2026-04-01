@@ -7,3 +7,6 @@ python-docx
 Pillow
 numpy
 pymupdf
+streamlit-sortables
+fpdf
+xlrd
