@@ -48,9 +48,9 @@ st.markdown("""
     div[data-baseweb="select"] input {
         caret-color: transparent !important;
         cursor: pointer !important;
-    }
-    div[data-baseweb="select"] > div {
-        align-items: center !important; 
+        position: absolute !important; /* 입력창을 문서 흐름에서 제외하여 글씨 밀림 원천 차단 */
+        opacity: 0 !important;         /* 시각적으로 투명하게 처리 */
+        height: 0 !important;
     }
     
     /* 3. 신버전/구버전 라디오 버튼 글씨 줄바꿈 방지 */
@@ -844,7 +844,7 @@ def parse_pdf_final(doc, mode="CFF(K)"):
 
         s14 = {}
         s14["UN"] = re.sub(r'\D', '', extract_section_smart(all_lines, "UN No.", "Proper shipping name", mode))
-        s14["NAME"] = re.sub(r'\([^)]*\)', '', re.sub(r'(?i)shipping\s*name', '', re.sub(r'(?i)proper\s*shipping\s*name', '', extract_section_smart(all_lines, "Proper shipping name", ["C. Hazard Class", "Hazard Class"], mode)))).replace("-", "").strip()
+        s14["NAME"] = re.sub(r'\([^)]*\)', '', re.sub(r'(?i)shipping\s*name', '', re.sub(r'(?i)proper\s*shipping\s*name', '', extract_section_smart(all_lines, "14.2 Proper", "14.3 Transport", mode)))).replace("-", "").strip()
         class_match = re.search(r'(\d)', extract_section_smart(all_lines, "C. Hazard Class", ["D. IMDG", "Packing group"], mode).replace("-", ""))
         s14["CLASS"] = class_match.group(1) if class_match else ""
         s14["PG"] = extract_section_smart(all_lines, "Packing group", "E. Marine pollutant", mode).replace("-", "").strip()
