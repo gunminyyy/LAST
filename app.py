@@ -44,21 +44,13 @@ st.markdown("""
     [data-testid="stFileUploaderFileData"] { display: none; }
     div[data-testid="stHorizontalBlock"] div div div div { display: block !important; width: 100% !important; }
     
-    /* 2. 모드 선택(Selectbox) 클릭 시 타자 입력 방지 및 수직 정중앙 완벽 고정 (쏠림 해결) */
-    div[data-baseweb="select"] > div {
-        align-items: center !important; 
-    }
-    div[data-baseweb="select"] div[data-baseweb="base-input"] {
-        display: flex !important;
-        align-items: center !important;
-        height: 100% !important;
-    }
+    /* 2. 모드 선택(Selectbox) 클릭 시 타자 입력 커서 숨김 및 글자 위아래 쏠림(잘림) 완벽 해결 */
     div[data-baseweb="select"] input {
         caret-color: transparent !important;
         cursor: pointer !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        vertical-align: middle !important;
+    }
+    div[data-baseweb="select"] > div {
+        align-items: center !important; 
     }
     
     /* 3. 신버전/구버전 라디오 버튼 글씨 줄바꿈 방지 */
@@ -66,7 +58,7 @@ st.markdown("""
         white-space: nowrap !important;
     }
     
-    /* 4. 기타 양식(OTHERS) 체크박스 줄바꿈 방지 및 모든 항목 동일 간격 강제 지정 */
+    /* 4. 기타 양식(OTHERS) 체크박스 줄바꿈 방지 및 동일 간격 설정 */
     div[data-testid="stCheckbox"] label p {
         white-space: nowrap !important;
         overflow: hidden !important;
