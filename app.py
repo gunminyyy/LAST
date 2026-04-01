@@ -352,7 +352,7 @@ def process_ifra(pdf_file, customer_name, product_name, mode):
     return output_io, f"{product_name} IFRA 51TH.docx"
 
 # ==============================================================================
-# [4번: MSDS 변환기 로직] (핵심 로직 보존)
+# [4번: MSDS 변환기 로직]
 # ==============================================================================
 def get_master_data_path():
     try: base_path = sys._MEIPASS
@@ -1419,7 +1419,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
 # ==============================================================================
 # [5번: OTHERS 변환기 로직]
 # ==============================================================================
-def process_others(customer_name, product_name):
+def process_others(customer_name, product_name, selected_files):
     kst = timezone(timedelta(hours=9))
     current_time = datetime.now(kst)
     english_months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -1431,7 +1431,7 @@ def process_others(customer_name, product_name):
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for filename in os.listdir(template_dir):
-            if filename.endswith(".docx") and not filename.startswith("~"):
+            if filename in selected_files and filename.endswith(".docx") and not filename.startswith("~"):
                 file_path = os.path.join(template_dir, filename)
                 try:
                     doc = DocxTemplate(file_path)
@@ -1452,14 +1452,19 @@ st.title("📄 아로마준 통합 양식 변환기")
 
 # --- 공통 정보 및 일괄 변환 ---
 st.subheader("공통 정보 입력")
-col_top1, col_top2, col_top3 = st.columns([2, 2, 1])
+col_top1, col_top2, col_top_mode, col_top3 = st.columns([2, 2, 2, 1])
 with col_top1:
     global_customer = st.text_input("고객사명 (CUSTOMER)")
 with col_top2:
     global_product = st.text_input("제품명 (PRODUCT)")
+with col_top_mode:
+    global_mode = st.selectbox("모드 선택", ["CFF(K)", "CFF(E)", "HP(K)", "HP(E)"])
 with col_top3:
     st.write("")
     batch_run = st.button("🌟 일괄 변환 실행", use_container_width=True)
+
+# 통합 모드를 기준으로 SPEC, ALLERGY, IFRA용 기본 모드(CFF or HP) 판별
+base_mode = "CFF" if "CFF" in global_mode else "HP"
 
 st.divider()
 
@@ -1470,13 +1475,12 @@ with col1_1:
     spec_up = st.file_uploader("원본 PDF 업로드", type=["pdf"], key="spec_up")
 with col1_2:
     st.subheader(" ")
-    spec_mode = st.selectbox("모드 선택", ["CFF", "HP"], key="spec_mode")
     if st.button("SPEC 변환", use_container_width=True):
         if not spec_up or not global_product: st.warning("원본 파일과 제품명을 입력해주세요.")
         else:
             with st.spinner("SPEC 변환 중..."):
                 try:
-                    res, fname = process_spec(spec_up, global_product, spec_mode)
+                    res, fname = process_spec(spec_up, global_product, base_mode)
                     st.session_state['spec_res'] = res.getvalue()
                     st.session_state['spec_fname'] = fname
                     st.success("변환 성공!")
@@ -1497,7 +1501,6 @@ with col2_1:
     allergy_up = st.file_uploader("원본 Excel 업로드", type=['xlsx', 'xls'], key="allergy_up")
 with col2_2:
     st.subheader(" ")
-    allergy_mode = st.selectbox("모드 선택", ["CFF", "HP"], key="allergy_mode")
     if st.button("ALLERGY 변환", use_container_width=True):
         if not allergy_up or not global_customer or not global_product: st.warning("원본 파일, 고객사명, 제품명을 모두 입력해주세요.")
         else:
@@ -1505,7 +1508,7 @@ with col2_2:
                 try:
                     input_df = pd.read_excel(allergy_up)
                     base_path = get_resource_path("ALLERGY templates")
-                    if allergy_mode == "CFF":
+                    if base_mode == "CFF":
                         res_83 = logic_cff_83(input_df, os.path.join(base_path, "83 CFF.xlsx"), global_customer, global_product)
                         res_26 = logic_cff_26(input_df, os.path.join(base_path, "26 통합.xlsx"), global_customer, global_product)
                     else:
@@ -1536,13 +1539,12 @@ with col3_1:
     ifra_up = st.file_uploader("원본 PDF 업로드", type=["pdf"], key="ifra_up")
 with col3_2:
     st.subheader(" ")
-    ifra_mode = st.selectbox("모드 선택", ["CFF", "HP"], key="ifra_mode")
     if st.button("IFRA 변환", use_container_width=True):
         if not ifra_up or not global_customer or not global_product: st.warning("원본 파일, 고객사명, 제품명을 모두 입력해주세요.")
         else:
             with st.spinner("IFRA 변환 중..."):
                 try:
-                    res, fname = process_ifra(ifra_up, global_customer, global_product, ifra_mode)
+                    res, fname = process_ifra(ifra_up, global_customer, global_product, base_mode)
                     st.session_state['ifra_res'] = res.getvalue()
                     st.session_state['ifra_fname'] = fname
                     st.success("변환 성공!")
@@ -1563,14 +1565,13 @@ with col4_1:
     msds_up = st.file_uploader("원본 PDF 업로드", type=["pdf"], accept_multiple_files=True, key="msds_up")
 with col4_2:
     st.subheader(" ")
-    msds_mode = st.selectbox("모드 선택", ["CFF(K)", "CFF(E)", "HP(K)", "HP(E)"], key="msds_mode")
     msds_ri = ""
     msds_kor_file = None
     msds_kor_ver = "신버전"
     
-    if "HP" in msds_mode:
+    if "HP" in global_mode:
         msds_ri = st.text_input("굴절률 입력", key="msds_ri")
-    if "E" in msds_mode:
+    if "E" in global_mode:
         st.info("💡 영문 양식 생성 시 국문 파일 첨부")
         msds_kor_file = st.file_uploader("국문 엑셀 파일", type="xlsx", key="msds_kor_file")
         msds_kor_ver = st.radio("국문 양식 버전", ["신버전", "구버전"], key="msds_kor_ver")
@@ -1579,7 +1580,7 @@ with col4_2:
         if not msds_up or not global_customer or not global_product: st.warning("고객사명, 제품명, 원본 파일을 모두 입력해주세요.")
         else:
             with st.spinner("MSDS 변환 중..."):
-                res_dict = process_msds(msds_up, global_product, msds_mode, msds_ri, msds_kor_file, msds_kor_ver)
+                res_dict = process_msds(msds_up, global_product, global_mode, msds_ri, msds_kor_file, msds_kor_ver)
                 if "error" in res_dict:
                     st.error(res_dict["error"])
                 else:
@@ -1599,14 +1600,31 @@ st.divider()
 col5_1, col5_2, col5_3 = st.columns(3)
 with col5_1:
     st.subheader("5. 기타(원본 불필요) 양식 변환")
-    st.info("이 양식은 원본 파일 첨부가 필요 없으며, 입력한 고객사명과 제품명만 참고하여 모든 파일이 ZIP 형식으로 일괄 생성됩니다.")
+    st.info("이 양식은 원본 파일 첨부가 필요 없으며, 입력한 고객사명과 제품명만 참고하여 선택한 파일들이 ZIP 형식으로 일괄 생성됩니다.")
+    
+    template_dir = get_resource_path("OTHERS templates")
+    available_others = []
+    if os.path.exists(template_dir):
+        available_others = sorted([f for f in os.listdir(template_dir) if f.endswith(".docx") and not f.startswith("~")])
+    
+    selected_others = []
+    if available_others:
+        cols = st.columns(2)
+        for i, f in enumerate(available_others):
+            with cols[i % 2]:
+                if st.checkbox(f.replace(".docx", ""), key=f"chk_other_{i}"):
+                    selected_others.append(f)
+    else:
+        st.warning("OTHERS templates 폴더에 변환 가능한 파일이 없습니다.")
+
 with col5_2:
     st.subheader(" ")
     if st.button("기타 변환", use_container_width=True):
         if not global_customer or not global_product: st.warning("상단의 고객사명과 제품명을 모두 입력해주세요.")
+        elif not selected_others: st.warning("변환할 파일을 하나 이상 체크해주세요.")
         else:
             with st.spinner("기타 양식 변환 중..."):
-                res, info = process_others(global_customer, global_product)
+                res, info = process_others(global_customer, global_product, selected_others)
                 if res:
                     st.session_state['others_res'] = res.getvalue()
                     st.session_state['others_fname'] = info
@@ -1632,7 +1650,7 @@ if batch_run:
             # 1. SPEC
             if spec_up:
                 try:
-                    res, fname = process_spec(spec_up, global_product, spec_mode)
+                    res, fname = process_spec(spec_up, global_product, base_mode)
                     st.session_state['spec_res'] = res.getvalue(); st.session_state['spec_fname'] = fname
                 except Exception as e: st.error(f"SPEC 일괄 변환 오류: {e}")
             
@@ -1641,7 +1659,7 @@ if batch_run:
                 try:
                     input_df = pd.read_excel(allergy_up)
                     base_path = get_resource_path("ALLERGY templates")
-                    if allergy_mode == "CFF":
+                    if base_mode == "CFF":
                         r83 = logic_cff_83(input_df, os.path.join(base_path, "83 CFF.xlsx"), global_customer, global_product)
                         r26 = logic_cff_26(input_df, os.path.join(base_path, "26 통합.xlsx"), global_customer, global_product)
                     else:
@@ -1656,23 +1674,22 @@ if batch_run:
             # 3. IFRA
             if ifra_up:
                 try:
-                    res, fname = process_ifra(ifra_up, global_customer, global_product, ifra_mode)
+                    res, fname = process_ifra(ifra_up, global_customer, global_product, base_mode)
                     st.session_state['ifra_res'] = res.getvalue(); st.session_state['ifra_fname'] = fname
                 except Exception as e: st.error(f"IFRA 일괄 변환 오류: {e}")
                 
             # 4. MSDS
             if msds_up:
-                res_dict = process_msds(msds_up, global_product, msds_mode, msds_ri, msds_kor_file, msds_kor_ver)
+                res_dict = process_msds(msds_up, global_product, global_mode, msds_ri, msds_kor_file, msds_kor_ver)
                 if "error" in res_dict: st.error(f"MSDS 일괄 변환 오류: {res_dict['error']}")
                 else: st.session_state['msds_res'] = [{'fname': f, 'data': res_dict["data"][f]} for f in res_dict["files"]]
 
-            # 5. OTHERS (일괄 변환 시 항상 포함되도록 로직 수정)
-            res, info = process_others(global_customer, global_product)
-            if res:
-                st.session_state['others_res'] = res.getvalue()
-                st.session_state['others_fname'] = info
-            else: st.error(f"OTHERS 일괄 변환 오류: {info}")
+            # 5. OTHERS (체크박스에서 선택된 파일만 변환)
+            if selected_others:
+                res, info = process_others(global_customer, global_product, selected_others)
+                if res:
+                    st.session_state['others_res'] = res.getvalue()
+                    st.session_state['others_fname'] = info
+                else: st.error(f"OTHERS 일괄 변환 오류: {info}")
             
-            st.success("✅ 파일이 첨부된 모든 항목 및 기타 양식의 일괄 변환이 완료되었습니다. 각 섹션의 우측에서 결과를 다운로드하세요!")
-            st.rerun() # UI 리프레시를 위해 재실행
-
+            st.success("✅ 파일이 첨부되거나 선택된 모든 항목의 일괄 변환이 완료되었습니다. 각 섹션의 우측에서 결과를 다운로드하세요!")
