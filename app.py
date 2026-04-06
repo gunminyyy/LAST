@@ -1973,4 +1973,85 @@ ready = files_A and files_B
 if mode_review == "원본 vs 83알러지 vs 26알러지": ready = ready and files_C
 
 if ready:
-    num_pairs = min(len(files_A), len(files_B), len(files_C)) if (mode_review == "원본
+    num_pairs = min(len(files_A), len(files_B), len(files_C)) if (mode_review == "원본 vs 83알러지 vs 26알러지") else min(len(files_A), len(files_B))
+    
+    for idx in range(num_pairs):
+        try:
+            p_name_1, m1 = extract_data(files_A[idx], is_23=("26알러지" in labels[0]), is_83=("83알러지" in labels[0]))
+            p_name_2, m2 = extract_data(files_B[idx], is_23=("26알러지" in labels[1]), is_83=("83알러지" in labels[1]))
+            
+            m3 = None
+            p_name_3 = None
+            if mode_review == "원본 vs 83알러지 vs 26알러지":
+                p_name_3, m3 = extract_data(files_C[idx], is_23=True)
+
+            display_p_name = p_name_2 if "알러지" in labels[1] else p_name_1
+            if mode_review == "원본 vs 83알러지 vs 26알러지":
+                display_p_name = p_name_2
+
+            if "26알러지" in mode_review:
+                m1 = {cas: d for cas, d in m1.items() if not cas.isdisjoint(TARGET_23_CAS)}
+                m2 = {cas: d for cas, d in m2.items() if not cas.isdisjoint(TARGET_23_CAS)}
+                if m3: m3 = {cas: d for cas, d in m3.items() if not cas.isdisjoint(TARGET_23_CAS)}
+
+            all_cas_sets = set(m1.keys()) | set(m2.keys())
+            if m3: all_cas_sets |= set(m3.keys())
+
+            rows, mismatch = [], 0
+            
+            for cas in all_cas_sets:
+                v1_data = next((m1[c] for c in m1 if not cas.isdisjoint(c)), None)
+                v2_data = next((m2[c] for c in m2 if not cas.isdisjoint(c)), None)
+                v3_data = next((m3[c] for c in m3 if not cas.isdisjoint(c)), None) if m3 is not None else None
+
+                v1 = v1_data['v'] if v1_data else "누락"
+                v2 = v2_data['v'] if v2_data else "누락"
+                v3 = (v3_data['v'] if v3_data else "누락") if m3 is not None else None
+
+                name = (v1_data or v2_data or v3_data)['n']
+
+                match = True
+                compare_vals = [v for v in [v1, v2, v3] if v is not None]
+                
+                if "누락" in compare_vals:
+                    match = False
+                else:
+                    it = iter(compare_vals)
+                    first = next(it)
+                    if not all(abs(first - rest) < 0.0001 for rest in it):
+                        match = False
+
+                if not match: mismatch += 1
+                
+                row_data = {"번호": len(rows)+1, "CAS": ", ".join(list(cas)), "물질명": name, labels[0]: v1, labels[1]: v2}
+                if m3 is not None: row_data[labels[2]] = v3
+                row_data["상태"] = "✅" if match else "❌"
+                rows.append(row_data)
+
+            def get_sum(df_rows, key):
+                return sum([r[key] for r in df_rows if isinstance(r[key], (int, float))])
+            
+            t_a, t_b = get_sum(rows, labels[0]), get_sum(rows, labels[1])
+            total_match = abs(t_a - t_b) < 0.0001
+            total_row = {"번호": "Total", "CAS": "-", "물질명": "합계", labels[0]: round(t_a, 6), labels[1]: round(t_b, 6)}
+            if m3 is not None:
+                t_c = get_sum(rows, labels[2])
+                total_row[labels[2]] = round(t_c, 6)
+                if abs(t_a - t_c) > 0.0001: total_match = False
+            total_row["상태"] = "✅" if total_match else "❌"
+            rows.append(total_row)
+
+            # 결과 표 출력
+            st.expander(f"{'✅' if mismatch == 0 else '❌'} [{idx+1}번] {display_p_name}").dataframe(
+                pd.DataFrame(rows).astype(str),
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "CAS": st.column_config.TextColumn("CAS", width="medium", help="마우스를 올리면 전체 CAS 번호가 보입니다.")
+                }
+            )
+            
+        except Exception as e:
+            st.error(f"{idx+1}번 처리 오류: {e}")
+else:
+    st.info("검토할 파일들을 모두 업로드해 주세요.")
