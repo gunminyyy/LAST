@@ -139,7 +139,7 @@ if not st.session_state['authenticated']:
         st.markdown("<h3 style='text-align:center; margin-top:0;'>🔒 보안 인증</h3>", unsafe_allow_html=True)
         st.markdown("<p style='text-align:center; color:#666; font-size:14px; margin-bottom:20px;'>프로그램을 사용하시려면<br>패스워드를 입력해주세요.</p>", unsafe_allow_html=True)
         pwd = st.text_input("패스워드", type="password", label_visibility="collapsed", placeholder="패스워드 입력")
-        submitted = st.form_submit_button("프로그램 실행 🚀", use_container_width=True)
+        submitted = st.form_submit_button("프로그램 실행", use_container_width=True)
         
         if submitted:
             if pwd == "a1234":
