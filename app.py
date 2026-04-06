@@ -84,62 +84,69 @@ st.markdown("""
 
 
 # ==============================================================================
-# [패스워드 인증 로직 (배경 블러 처리 포함)]
+# [패스워드 인증 로직 (완벽한 블러 및 클릭/조작 차단 적용)]
 # ==============================================================================
 if 'authenticated' not in st.session_state:
     st.session_state['authenticated'] = False
 
 if not st.session_state['authenticated']:
-    # 첫 번째 컨테이너에 로그인 창 렌더링
-    auth_container = st.container()
-    with auth_container:
-        st.markdown("<h3 style='text-align: center; color: #333;'>🔒 시스템 접근 제한</h3>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: gray;'>올바른 패스워드를 입력해야 사용할 수 있습니다.</p>", unsafe_allow_html=True)
-        pwd = st.text_input("패스워드", type="password", key="auth_pwd")
-        if st.button("실행 🚀", use_container_width=True):
-            if pwd == "a1234":
-                st.session_state['authenticated'] = True
-                st.rerun()
-            else:
-                st.error("❌ 패스워드가 올바르지 않습니다.")
-    
-    # CSS를 통해 로그인 창을 중앙 팝업처럼 띄우고, 배경(나머지 코드 결과물)은 완벽하게 블러 처리
     st.markdown("""
         <style>
-        /* 사이드바 숨김 */
-        [data-testid="stSidebar"] {
-            display: none !important;
-        }
-        /* 메인 컨테이너 위치 지정 */
-        .main .block-container {
-            position: relative;
-        }
-        /* 첫 번째 생성된 요소(우리가 만든 로그인 창)를 정중앙 팝업으로 설정 */
-        .main .block-container > div:first-child {
+        /* 1. 하위 UI를 완벽히 가리고 클릭을 차단하는 투명 방어막(Overlay) 생성 */
+        #blur-overlay {
             position: fixed !important;
-            top: 50% !important;
-            left: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            background: white !important;
-            padding: 30px 40px !important;
-            border-radius: 12px !important;
-            box-shadow: 0px 10px 40px rgba(0,0,0,0.3) !important;
-            z-index: 99999 !important;
-            width: 400px !important;
-            max-width: 90vw !important;
-            border: 1px solid #ddd;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            background-color: rgba(255, 255, 255, 0.4) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            z-index: 999990 !important;
+            pointer-events: auto !important; /* 클릭, 탭 등 모든 상호작용 여기서 차단 */
         }
-        /* 로그인 창을 제외한 2번째 자식 요소부터의 모든 앱 화면을 블러 처리 및 클릭 차단 */
-        .main .block-container > div:not(:first-child) {
-            filter: blur(10px) grayscale(30%) !important;
+        
+        /* 2. 로그인 창(Form)만 방어막 뚫고 맨 위로 올라오게 설정 */
+        [data-testid="stForm"] {
+            position: fixed !important;
+            top: 50% !important; left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            z-index: 999999 !important;
+            background: white !important;
+            padding: 2.5rem !important;
+            border-radius: 15px !important;
+            box-shadow: 0px 10px 40px rgba(0,0,0,0.3) !important;
+            width: 350px !important;
+            border: 1px solid #ddd !important;
+        }
+        
+        /* 3. 사이드바와 상단 헤더가 방어막 위로 올라오지 못하도록 강제 블러 및 층위 하락 */
+        [data-testid="stHeader"], [data-testid="stSidebar"] {
+            z-index: 0 !important;
+            filter: blur(12px) !important;
             pointer-events: none !important;
-            user-select: none !important;
-            opacity: 0.6 !important;
+        }
+        
+        /* 4. 인증 전에 스크롤바 조작 원천 차단 */
+        body {
+            overflow: hidden !important;
         }
         </style>
+        
+        <div id="blur-overlay"></div>
     """, unsafe_allow_html=True)
-    # 💡 st.stop()을 지우고 아래의 본문 코드가 렌더링되게 놔둡니다. 
-    # 코드가 렌더링되어야만 위 CSS가 배경을 블러(흐림) 상태로 덮어씌울 수 있습니다.
+    
+    # 5. 정중앙에 띄워질 패스워드 입력 폼 생성 (st.stop을 안 쓰므로 하위 UI가 렌더되어 블러 효과가 나타남)
+    with st.form("login_form"):
+        st.markdown("<h3 style='text-align:center; margin-top:0;'>🔒 보안 인증</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align:center; color:#666; font-size:14px; margin-bottom:20px;'>프로그램을 사용하시려면<br>패스워드를 입력해주세요.</p>", unsafe_allow_html=True)
+        pwd = st.text_input("패스워드", type="password", label_visibility="collapsed", placeholder="패스워드 입력")
+        submitted = st.form_submit_button("프로그램 실행 🚀", use_container_width=True)
+        
+        if submitted:
+            if pwd == "a1234":
+                st.session_state['authenticated'] = True
+                st.rerun() # 인증 성공 시 화면을 재시작하여 방어막 제거
+            else:
+                st.error("❌ 패스워드가 올바르지 않습니다.")
 
 
 # --- [종료 버튼 기능] ---
