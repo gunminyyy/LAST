@@ -1509,30 +1509,49 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 safe_write_force(dest_ws, 542, 2, datetime.now().strftime("%Y.%m.%d"), center=False)
 
             # 이미지 삽입
-            collected_pil_images = []
-            for img_info in doc.get_page_images(0):
-                try:
-                    pil_img = PILImage.open(io.BytesIO(doc.extract_image(img_info[0])["image"]))
-                    if option in ["HP(K)", "HP(E)"] and (is_blue_dominant(pil_img) or not is_square_shaped(pil_img.size[0], pil_img.size[1])): continue
-                    if loaded_refs:
-                        matched_name = find_best_match_name(pil_img, loaded_refs, mode=option)
-                        if matched_name: collected_pil_images.append((extract_number(matched_name), loaded_refs[matched_name]))
-                except: continue
-            
-            unique_images = {}
-            for key, img in collected_pil_images:
-                if key not in unique_images: unique_images[key] = img
-            final_sorted_imgs = [item[1] for item in sorted(unique_images.items(), key=lambda x: x[0])]
+            if option in ["CFF(K)", "HP(K)", "CFF(E)", "HP(E)"]:
+                collected_pil_images = []
+                page = doc[0]
+                image_list = doc.get_page_images(0)
+                
+                for img_info in image_list:
+                    xref = img_info[0]
+                    try:
+                        base_image = doc.extract_image(xref)
+                        pil_img = PILImage.open(io.BytesIO(base_image["image"]))
+                        
+                        if option in ["HP(K)", "HP(E)"]:
+                            if is_blue_dominant(pil_img): continue
+                            w, h = pil_img.size
+                            if not is_square_shaped(w, h): continue
 
-            if final_sorted_imgs:
-                unit_size = 67; icon_size = 60; padding_top = 4; padding_left = (unit_size - icon_size) // 2
-                merged_img = PILImage.new('RGBA', (unit_size * len(final_sorted_imgs), unit_size), (255, 255, 255, 0))
-                for idx, p_img in enumerate(final_sorted_imgs):
-                    merged_img.paste(p_img.resize((icon_size, icon_size), PILImage.LANCZOS), ((idx * unit_size) + padding_left, padding_top))
-                img_byte_arr = io.BytesIO()
-                merged_img.save(img_byte_arr, format='PNG')
-                img_byte_arr.seek(0)
-                dest_ws.add_image(XLImage(img_byte_arr), 'B23' if option in ["HP(K)", "CFF(K)"] else 'B22') 
+                        if loaded_refs:
+                            matched_name = find_best_match_name(pil_img, loaded_refs, mode=option)
+                            if matched_name:
+                                clean_img = loaded_refs[matched_name]
+                                collected_pil_images.append((extract_number(matched_name), clean_img))
+                    except: continue
+
+                unique_images = {}
+                for key, img in collected_pil_images:
+                    if key not in unique_images: unique_images[key] = img
+                
+                final_sorted_imgs = [item[1] for item in sorted(unique_images.items(), key=lambda x: x[0])]
+
+                if final_sorted_imgs:
+                    unit_size = 67; icon_size = 60
+                    padding_top = 4; padding_left = (unit_size - icon_size) // 2
+                    total_width = unit_size * len(final_sorted_imgs)
+                    total_height = unit_size
+                    merged_img = PILImage.new('RGBA', (total_width, total_height), (255, 255, 255, 0))
+                    for idx, p_img in enumerate(final_sorted_imgs):
+                        p_img_resized = p_img.resize((icon_size, icon_size), PILImage.LANCZOS)
+                        merged_img.paste(p_img_resized, ((idx * unit_size) + padding_left, padding_top))
+                    
+                    img_byte_arr = io.BytesIO()
+                    merged_img.save(img_byte_arr, format='PNG')
+                    img_byte_arr.seek(0)
+                    dest_ws.add_image(XLImage(img_byte_arr), 'B23' if option in ["HP(K)", "CFF(K)"] else 'B22') 
 
             dest_wb.external_links = []
             output = io.BytesIO()
