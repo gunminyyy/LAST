@@ -697,7 +697,8 @@ def get_reference_images():
 def is_blue_dominant(pil_img):
     try:
         img = pil_img.resize((50, 50)).convert('RGB')
-        data = np.array(img); r, g, b = data[:,:,0], data[:,:,1], data[:,:,2]
+        data = np.array(img)
+        r, g, b = data[:,:,0].astype(int), data[:,:,1].astype(int), data[:,:,2].astype(int)
         blue_mask = (b > r + 30) & (b > g + 30)
         return (np.sum(blue_mask) / 2500) > 0.05
     except: return False
@@ -1210,10 +1211,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
         target_sheet = next((s for s in sheet_names if "위험" in s and "안전" in s), sheet_names[0])
         df_code = pd.read_excel(master_data_path, sheet_name=target_sheet)
         
-        # [수정] CFF(K) 모드일 경우 13번째 열(인덱스 12) 필터링 (L열)
-        if option == "CFF(K)":
-            target_col_idx = 12
-        elif "K" in option:
+        if "K" in option:
             target_col_idx = 1
         else:
             target_col_idx = 2
