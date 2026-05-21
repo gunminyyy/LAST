@@ -608,7 +608,8 @@ def fill_fixed_range(ws, start_row, end_row, codes, code_map, mode="CFF(K)"):
             safe_write_force(ws, current_row, 2, code, center=False)
             safe_write_force(ws, current_row, 4, desc, center=False)
         else:
-            if "K" in mode and current_row in [25, 38, 50, 64, 70]:
+            # [수정됨] K 모드에서 자료없음이 찍히는 시작 행(Hazard, Prev, Resp, Stor, Disp)을 새 범위에 맞게 조정
+            if "K" in mode and current_row in [25, 46, 66, 86, 106]:
                 ws.row_dimensions[current_row].hidden = False
                 safe_write_force(ws, current_row, 2, "")
                 safe_write_force(ws, current_row, 4, "자료없음", center=False)
@@ -622,7 +623,14 @@ def fill_fixed_range(ws, start_row, end_row, codes, code_map, mode="CFF(K)"):
                 safe_write_force(ws, current_row, 4, "")
 
 def fill_composition_data(ws, comp_data, cas_to_name_map, mode="CFF(K)"):
-    start_row = 80; end_row = 122 if "E" in mode else 123
+    # [수정됨] K 모드일 경우 구성성분 범위를 133 ~ 332로 확장
+    if mode in ["CFF(K)", "HP(K)"]:
+        start_row = 133
+        end_row = 332
+    else:
+        start_row = 80
+        end_row = 122 if "E" in mode else 123
+        
     limit = end_row - start_row + 1
     for i in range(limit):
         current_row = start_row + i
@@ -1231,8 +1239,8 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                         kor_data_map[n] = {
                             'F': str(row.iloc[5]) if len(row) > 5 else "", 'G': str(row.iloc[6]) if len(row) > 6 else "", 
                             'H': str(row.iloc[7]) if len(row) > 7 else "", 'P': str(row.iloc[15]) if len(row) > 15 else "", 
-                            'T': str(row.iloc[19]) if len(row) > 19 else "", 'U': str(row.iloc[20]) if len(row) > 20 else "", 
-                            'V': str(row.iloc[21]) if len(row) > 21 else ""
+                            'Q': str(row.iloc[16]) if len(row) > 16 else "", 'T': str(row.iloc[19]) if len(row) > 19 else "", 
+                            'U': str(row.iloc[20]) if len(row) > 20 else "", 'V': str(row.iloc[21]) if len(row) > 21 else ""
                         }
         else:
             sheet_eng = next((s for s in sheet_names if "영문" in s), sheet_names[2] if len(sheet_names) > 2 else sheet_names[-1])
@@ -1277,12 +1285,12 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
             return res
 
         if "신버전" in kor_form_version:
-            kor_override_data["h_codes"] = ext_codes(kor_ws, 25, 36)
-            kor_override_data["p_prev"] = ext_codes(kor_ws, 38, 49)
-            kor_override_data["p_resp"] = ext_codes(kor_ws, 50, 63)
-            kor_override_data["p_stor"] = ext_codes(kor_ws, 64, 69)
-            kor_override_data["p_disp"] = ext_codes(kor_ws, 70, 72)
-            kor_override_data["composition_data"] = ext_comp(kor_ws, 80, 122)
+            kor_override_data["h_codes"] = ext_codes(kor_ws, 25, 44)
+            kor_override_data["p_prev"] = ext_codes(kor_ws, 46, 65)
+            kor_override_data["p_resp"] = ext_codes(kor_ws, 66, 85)
+            kor_override_data["p_stor"] = ext_codes(kor_ws, 86, 105)
+            kor_override_data["p_disp"] = ext_codes(kor_ws, 106, 125)
+            kor_override_data["composition_data"] = ext_comp(kor_ws, 133, 332)
         else:
             all_c = ext_codes(kor_ws, 25, 70)
             kor_override_data["h_codes"] = [c for c in all_c if c.startswith('H')]
@@ -1423,13 +1431,13 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
 
                 safe_write_force(dest_ws, 24, 2, parsed_data["signal_word"] if parsed_data["signal_word"] else "", center=False) 
                 if option == "HP(K)":
-                    for r, v in [(38, "예방"), (50, "대응"), (64, "저장"), (70, "폐기")]: safe_write_force(dest_ws, r, 1, v, center=False)
+                    for r, v in [(46, "예방"), (66, "대응"), (86, "저장"), (106, "폐기")]: safe_write_force(dest_ws, r, 1, v, center=False)
 
-                fill_fixed_range(dest_ws, 25, 36, parsed_data["h_codes"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 38, 49, parsed_data["p_prev"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 50, 63, parsed_data["p_resp"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 64, 69, parsed_data["p_stor"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 70, 72, parsed_data["p_disp"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 25, 44, parsed_data["h_codes"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 46, 65, parsed_data["p_prev"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 66, 85, parsed_data["p_resp"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 86, 105, parsed_data["p_stor"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 106, 125, parsed_data["p_disp"], code_map, mode=option)
                 fill_composition_data(dest_ws, parsed_data["composition_data"], cas_name_map, mode=option)
                 
                 active_substances = [cas_name_map[c[0].replace(" ", "").strip()] for c in parsed_data["composition_data"] if c[0].replace(" ", "").strip() in cas_name_map and cas_name_map[c[0].replace(" ", "").strip()]]
@@ -1439,6 +1447,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                     try:
                         col_idx = openpyxl.utils.column_index_from_string(re.match(r"([A-Z]+)", cell_addr).group(1))
                         row_num = int(re.search(r"(\d+)", cell_addr).group(1))
+                        row_num += 210
                         safe_write_force(dest_ws, row_num, col_idx, "")
                         if formatted_txt:
                             safe_write_force(dest_ws, row_num, col_idx, formatted_txt, center=False)
@@ -1450,7 +1459,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                             except: pass
                     except: pass
                     
-                for r in list(range(125, 130)) + list(range(132, 135)) + [139, 140, 143, 144]:
+                for r in list(range(335, 340)) + list(range(342, 345)) + [348, 349, 350, 353, 354]:
                     try: 
                         c_a = dest_ws.cell(row=r, column=1)
                         if not isinstance(c_a, MergedCell): c_a.alignment = ALIGN_LEFT
@@ -1459,30 +1468,30 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 s8 = parsed_data["sec8"]
                 val148 = s8["B148"].replace("해당없음", "자료없음")
                 lines148 = [l.strip() for l in val148.split('\n') if l.strip()]
-                safe_write_force(dest_ws, 148, 2, ""); safe_write_force(dest_ws, 149, 2, ""); dest_ws.row_dimensions[149].hidden = True
+                safe_write_force(dest_ws, 358, 2, ""); safe_write_force(dest_ws, 359, 2, ""); dest_ws.row_dimensions[359].hidden = True
                 if lines148:
-                    safe_write_force(dest_ws, 148, 2, lines148[0], center=False)
+                    safe_write_force(dest_ws, 358, 2, lines148[0], center=False)
                     if len(lines148) > 1:
-                        safe_write_force(dest_ws, 149, 2, "\n".join(lines148[1:]), center=False)
-                        dest_ws.row_dimensions[149].hidden = False
-                safe_write_force(dest_ws, 150, 2, re.sub(r"^규정[:\s]*", "", s8["B150"].replace("해당없음", "자료없음")).strip(), center=False)
+                        safe_write_force(dest_ws, 359, 2, "\n".join(lines148[1:]), center=False)
+                        dest_ws.row_dimensions[359].hidden = False
+                safe_write_force(dest_ws, 458, 2, re.sub(r"^규정[:\s]*", "", s8["B150"].replace("해당없음", "자료없음")).strip(), center=False)
 
                 s9 = parsed_data["sec9"]
-                safe_write_force(dest_ws, 163, 2, s9["B163"], center=False)
+                safe_write_force(dest_ws, 569, 2, s9["B163"], center=False)
                 flash_num = re.findall(r'([<>]?\s*\d{2,3})' if option == "HP(K)" else r'(\d{2,3})', s9["B169"])
-                safe_write_force(dest_ws, 169, 2, f"{flash_num[0]}℃" if flash_num else "", center=False)
+                safe_write_force(dest_ws, 575, 2, f"{flash_num[0]}℃" if flash_num else "", center=False)
                 g_match = re.search(r'([\d\.]+)', s9["B176"].replace("(20℃)", "").replace("(물=1)", ""))
-                safe_write_force(dest_ws, 176, 2, f"{g_match.group(1)} ± 0.01" if g_match else "", center=False)
+                safe_write_force(dest_ws, 582, 2, f"{g_match.group(1)} ± 0.01" if g_match else "", center=False)
                 
-                if option == "HP(K)" and refractive_index_input: safe_write_force(dest_ws, 182, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
+                if option == "HP(K)" and refractive_index_input: safe_write_force(dest_ws, 588, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
                 else:
                     r_match = re.search(r'([\d\.]+)', s9["B182"].replace("(20℃)", ""))
-                    safe_write_force(dest_ws, 182, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
+                    safe_write_force(dest_ws, 588, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
 
-                for sr, er, ck in [(195, 226, 'F'), (228, 260, 'G'), (269, 300, 'H'), (316, 348, 'P'), (353, 385, 'P'), (392, 426, 'T'), (428, 460, 'U'), (465, 497, 'V')]:
+                for sr, er, ck in [(601, 800, 'F'), (802, 1001, 'G'), (1003, 1202, 'H'), (1218, 1417, 'P'), (1419, 1618, 'Q'), (1624, 1823, 'T'), (1825, 2024, 'U'), (2026, 2225, 'V')]:
                     fill_regulatory_section(dest_ws, sr, er, active_substances, kor_data_map, ck, mode=option)
 
-                for r in list(range(261, 268)) + list(range(349, 352)) + [386] + list(range(461, 464)): dest_ws.row_dimensions[r].hidden = True
+                for r in [1002, 1418] + list(range(1619, 1624)) + [2025]: dest_ws.row_dimensions[r].hidden = True
 
                 s14 = parsed_data["sec14"]
                 un_raw = str(s14.get("UN", "")).strip(); un_val = re.sub(r"\D", "", un_raw)
@@ -1492,19 +1501,19 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 class_val = str(s14.get("CLASS", "")).strip(); pg_val = str(s14.get("PG", "")).strip(); env_val = str(s14.get("ENV", "")).strip()
                 
                 for i, v in enumerate([un_val, name_val, class_val if class_val and "해당없음" not in class_val else "해당없음", pg_val if pg_val and "해당없음" not in pg_val else "해당없음", env_val if env_val and "해당없음" not in env_val else "해당없음"]):
-                    safe_write_force(dest_ws, 512+i, 2, v, center=False)
+                    safe_write_force(dest_ws, 2240+i, 2, v, center=False)
 
                 s15 = parsed_data["sec15"]
                 if option == "HP(K)":
                     clean_full = re.sub(r'[\s\-\,\.\:\(\)]+', '', s15.get("FULL_TEXT", ""))
                     if ("4류" in clean_full and "3석유류" in clean_full and "2000" in clean_full):
-                        safe_write_force(dest_ws, 521, 2, "4류 제3석유류(비수용성) 2,000L", center=False)
+                        safe_write_force(dest_ws, 2249, 2, "4류 제3석유류(비수용성) 2,000L", center=False)
                     else:
-                        safe_write_force(dest_ws, 521, 2, "", center=False)
-                        dest_ws.cell(row=521, column=2).fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
-                else: safe_write_force(dest_ws, 521, 2, s15.get("DANGER", "").strip(), center=False)
+                        safe_write_force(dest_ws, 2249, 2, "", center=False)
+                        dest_ws.cell(row=2249, column=2).fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
+                else: safe_write_force(dest_ws, 2249, 2, s15.get("DANGER", "").strip(), center=False)
 
-                safe_write_force(dest_ws, 542, 2, datetime.now().strftime("%Y.%m.%d"), center=False)
+                safe_write_force(dest_ws, 2270, 2, datetime.now().strftime("%Y.%m.%d"), center=False)
 
             # 이미지 삽입
             if option in ["CFF(K)", "HP(K)", "CFF(E)", "HP(E)"]:
