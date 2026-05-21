@@ -417,8 +417,8 @@ def process_value_ifra(val_str):
         if '.' in s:
             int_part, dec_part = s.split('.')
             dec_part = dec_part[:2].ljust(2, '0')
-            return f"{int_part}.{dec_part}"
-        return f"{s}.00"
+            return f"{int_part}.{dec_part}%"
+        return f"{s}.00%"
     except ValueError: return "Not Permitted"
 
 def process_ifra(pdf_file, customer_name, product_name, mode):
