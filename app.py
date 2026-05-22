@@ -1806,6 +1806,47 @@ def extract_data(file_raw, is_23=False, is_83=False):
     wb.close()
     return str(product_name).strip() if product_name else file_raw.name, data_map
 
+def process_others(customer_name, product_name, selected_files):
+    """
+    선택된 기타 양식(.docx) 템플릿들에 고객사, 제품명, 날짜를 입력하고
+    하나의 ZIP 파일로 압축하여 반환하는 함수입니다.
+    """
+    try:
+        zip_buffer = io.BytesIO()
+        template_dir = get_resource_path("OTHERS templates")
+        
+        # ZIP 파일 생성 준비
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for file_name in selected_files:
+                template_path = os.path.join(template_dir, file_name)
+                
+                # 워드 템플릿 열기
+                doc = DocxTemplate(template_path)
+                
+                # 템플릿에 들어갈 데이터 ({{CUSTOMER}}, {{PRODUCT}}, {{DATE}} 치환)
+                context = {
+                    "CUSTOMER": customer_name,
+                    "PRODUCT": product_name,
+                    "DATE": datetime.now().strftime("%d. %b. %Y").upper()
+                }
+                
+                # 데이터 렌더링
+                doc.render(context)
+                
+                # 변환된 문서를 메모리에 임시 저장
+                doc_io = io.BytesIO()
+                doc.save(doc_io)
+                doc_io.seek(0)
+                
+                # 제품명이 포함된 새로운 파일명으로 ZIP 안에 추가
+                output_name = f"{product_name} {file_name}"
+                zip_file.writestr(output_name, doc_io.getvalue())
+        
+        zip_buffer.seek(0)
+        return zip_buffer, f"{product_name}_OTHERS.zip"
+        
+    except Exception as e:
+        return None, f"기타 양식 처리 중 오류 발생: {e}"
 # ==============================================================================
 # [UI 레이아웃 구성: 파트 1 (통합 양식 변환기)]
 # ==============================================================================
