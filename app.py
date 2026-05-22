@@ -612,7 +612,6 @@ def fill_fixed_range(ws, start_row, end_row, codes, code_map, mode="CFF(K)"):
                 ws.row_dimensions[current_row].hidden = False
                 safe_write_force(ws, current_row, 2, "")
                 safe_write_force(ws, current_row, 4, "자료없음", center=False)
-            # [수정됨] E 모드의 새로운 시작 범위에 맞게 조정
             elif "E" in mode and current_row in [24, 45, 65, 85, 105]:
                 ws.row_dimensions[current_row].hidden = False
                 safe_write_force(ws, current_row, 2, "")
@@ -627,13 +626,19 @@ def fill_composition_data(ws, comp_data, cas_to_name_map, mode="CFF(K)"):
         start_row = 133
         end_row = 332
     else:
-        # [수정됨] 영문 모드 범위 (132~331)
         start_row = 132
         end_row = 331
         
     limit = end_row - start_row + 1
     for i in range(limit):
         current_row = start_row + i
+        
+        # [수정됨] B열(2번째 컬럼) 가운데 맞춤 강제 적용
+        try:
+            ws.cell(row=current_row, column=2).alignment = ALIGN_CENTER
+        except:
+            pass
+
         if i < len(comp_data):
             cas_no, concentration = comp_data[i]
             chem_name = cas_to_name_map.get(cas_no.replace(" ", "").strip(), "")
@@ -650,16 +655,25 @@ def fill_regulatory_section(ws, start_row, end_row, substances, data_map, col_ke
     limit = end_row - start_row + 1
     for i in range(limit):
         current_row = start_row + i
+        # [수정됨] A열에 내용(물질명)이 존재하는 경우
         if i < len(substances):
             substance_name = substances[i]
             safe_write_force(ws, current_row, 1, substance_name, center=False)
             cell_data = str(data_map.get(substance_name, {}).get(col_key, "")) if substance_name in data_map else ""
-            if cell_data == "nan" or "해당없음" in cell_data or "자료없음" in cell_data: cell_data = ""
+            
+            # [수정됨] "자료없음"이나 "해당없음"을 빈칸("")으로 지우지 않음. 오직 "nan"일 때만 빈칸 처리
+            if cell_data == "nan": 
+                cell_data = ""
+                
             safe_write_force(ws, current_row, 2, cell_data, center=False)
-            ws.row_dimensions[current_row].hidden = (cell_data == "")
+            
+            # [수정됨] A열에 물질명이 존재하면 무조건 숨김 해제
+            ws.row_dimensions[current_row].hidden = False
+            
             _, h = format_and_calc_height_sec47(cell_data, mode=mode)
             ws.row_dimensions[current_row].height = max(h, 24.0)
         else:
+            # [수정됨] A열에 물질명이 없는 남는 행들만 숨김 처리
             safe_write_force(ws, current_row, 1, "")
             safe_write_force(ws, current_row, 2, "")
             ws.row_dimensions[current_row].hidden = True
@@ -897,7 +911,8 @@ def parse_pdf_final(doc, mode="CFF(K)"):
 
         result["sec8"] = {
             "B154": extract_section_smart(all_lines, "Internal regulations", "ACGIH regulations", mode).replace("[", "").replace("]", ""),
-            "B156": extract_section_smart(all_lines, "ACGIH regulations", "Biological exposure", mode).replace("[", "").replace("]", "")
+            "B156": extract_section_smart(all_lines, "ACGIH regulations", "Biological exposure", mode).replace("[", "").replace("]", ""),
+            "B763": extract_section_smart(all_lines, "Biological exposure", ["9. Physical", "9. PHYSICAL"], mode).replace("[", "").replace("]", "")
         }
 
         result["sec9"] = {
@@ -973,7 +988,8 @@ def parse_pdf_final(doc, mode="CFF(K)"):
 
         result["sec8"] = {
             "B154": extract_section_smart(all_lines, "Internal regulations", "ACGIH regulations", mode).replace("[", "").replace("]", ""),
-            "B156": extract_section_smart(all_lines, "ACGIH regulations", "Biological exposure", mode).replace("[", "").replace("]", "")
+            "B156": extract_section_smart(all_lines, "ACGIH regulations", "Biological exposure", mode).replace("[", "").replace("]", ""),
+            "B763": extract_section_smart(all_lines, "Biological exposure", ["9. Physical", "9. PHYSICAL"], mode).replace("[", "").replace("]", "")
         }
 
         result["sec9"] = {
@@ -1315,7 +1331,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                     dest_ws.row_dimensions[19].height = len(parsed_data["hazard_cls"]) * 14.0
                 if parsed_data["signal_word"]: safe_write_force(dest_ws, 23, 2, parsed_data["signal_word"], center=False)
                 
-                # [수정됨] E모드 H/P 코드 범위
                 fill_fixed_range(dest_ws, 24, 43, parsed_data["h_codes"], code_map, mode=option)
                 fill_fixed_range(dest_ws, 45, 64, parsed_data["p_prev"], code_map, mode=option)
                 fill_fixed_range(dest_ws, 65, 84, parsed_data["p_resp"], code_map, mode=option)
@@ -1325,7 +1340,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 
                 active_substances = [cas_name_map[c[0].replace(" ", "").strip()] for c in parsed_data["composition_data"] if c[0].replace(" ", "").strip() in cas_name_map and cas_name_map[c[0].replace(" ", "").strip()]]
                 
-                # [수정됨] E모드 Sec 4~7 특정 셀 매핑
                 sd = parsed_data["sec4_to_7"]
                 cell_map_e = {
                     "B334": sd.get("B125",""), "B335": sd.get("B126",""), "B336": sd.get("B127",""), "B337": sd.get("B128",""), "B338": sd.get("B129",""),
@@ -1339,7 +1353,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                         safe_write_force(dest_ws, r_idx, 2, formatted, center=False)
                         dest_ws.row_dimensions[r_idx].height = h
 
-                # [수정됨] E모드 Sec 8 (Internal & ACGIH) 1물질 1행 숨김처리 로직
                 s8 = parsed_data["sec8"]
                 val_internal = s8.get("B154", "").replace("Not applicable", "no data available")
                 lines_internal = [l.strip() for l in val_internal.split('\n') if l.strip() and l.strip() != "no data available"]
@@ -1365,7 +1378,13 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                         safe_write_force(dest_ws, r, 2, "", center=False)
                         dest_ws.row_dimensions[r].hidden = True
 
-                # [수정됨] E모드 Sec 9 매핑
+                val_bio = s8.get("B763", "").strip()
+                if not val_bio or "not applicable" in val_bio.lower() or "no data" in val_bio.lower(): 
+                    val_bio = "no data available"
+                formatted_bio, h_bio = format_and_calc_height_sec47(val_bio, mode=option)
+                safe_write_force(dest_ws, 763, 2, formatted_bio, center=False)
+                dest_ws.row_dimensions[763].height = h_bio
+
                 s9 = parsed_data["sec9"]
                 safe_write_force(dest_ws, 774, 2, s9.get("B170","").capitalize(), center=False)
                 flash_num = re.findall(r'(\d{2,3})', s9.get("B176",""))
@@ -1379,15 +1398,12 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                     r_match = re.search(r'([\d\.]+)', s9.get("B189","").replace("(20℃)", ""))
                     safe_write_force(dest_ws, 793, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
 
-                # [수정됨] E모드 Toxicity 및 Ecological 정보 매핑
                 for sr, er, ck in [(806, 1005, 'F'), (1007, 1206, 'G'), (1208, 1407, 'H'), (1416, 1615, 'P'), (1617, 1816, 'Q'), (1822, 2021, 'T'), (2023, 2222, 'U'), (2224, 2423, 'V')]:
                     fill_regulatory_section(dest_ws, sr, er, active_substances, eng_data_map, ck, mode=option)
 
-                # [수정됨] E모드 표 사이 간격(Gap) 숨김처리
                 for r in [1006, 1207] + list(range(1408, 1416)) + [1616] + list(range(1817, 1822)) + [2022, 2223]: 
                     dest_ws.row_dimensions[r].hidden = True
 
-                # [수정됨] E모드 Sec 14 매핑
                 s14 = parsed_data["sec14"]
                 un_raw = str(s14.get("UN", "")).strip()
                 un_val = re.sub(r"\D", "", un_raw)
@@ -1414,7 +1430,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                     dest_ws.row_dimensions[19].height = len(parsed_data["hazard_cls"]) * 14.0
                 if parsed_data["signal_word"]: safe_write_force(dest_ws, 23, 2, parsed_data["signal_word"], center=False)
                 
-                # [수정됨] E모드 H/P 코드 범위
                 fill_fixed_range(dest_ws, 24, 43, parsed_data["h_codes"], code_map, mode=option)
                 fill_fixed_range(dest_ws, 45, 64, parsed_data["p_prev"], code_map, mode=option)
                 fill_fixed_range(dest_ws, 65, 84, parsed_data["p_resp"], code_map, mode=option)
@@ -1424,7 +1439,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 
                 active_substances = [cas_name_map[c[0].replace(" ", "").strip()] for c in parsed_data["composition_data"] if c[0].replace(" ", "").strip() in cas_name_map and cas_name_map[c[0].replace(" ", "").strip()]]
                 
-                # [수정됨] E모드 Sec 4~7 특정 셀 매핑
                 sd = parsed_data["sec4_to_7"]
                 cell_map_e = {
                     "B334": sd.get("B125",""), "B335": sd.get("B126",""), "B336": sd.get("B127",""), "B337": sd.get("B128",""), "B338": sd.get("B129",""),
@@ -1438,7 +1452,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                         safe_write_force(dest_ws, r_idx, 2, formatted, center=False)
                         dest_ws.row_dimensions[r_idx].height = h
 
-                # [수정됨] E모드 Sec 8 (Internal & ACGIH) 1물질 1행 숨김처리 로직
                 s8 = parsed_data["sec8"]
                 val_internal = s8.get("B154", "").replace("Not applicable", "no data available")
                 lines_internal = [l.strip() for l in val_internal.split('\n') if l.strip() and l.strip() != "no data available"]
@@ -1464,7 +1477,13 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                         safe_write_force(dest_ws, r, 2, "", center=False)
                         dest_ws.row_dimensions[r].hidden = True
 
-                # [수정됨] E모드 Sec 9 매핑
+                val_bio = s8.get("B763", "").strip()
+                if not val_bio or "not applicable" in val_bio.lower() or "no data" in val_bio.lower(): 
+                    val_bio = "no data available"
+                formatted_bio, h_bio = format_and_calc_height_sec47(val_bio, mode=option)
+                safe_write_force(dest_ws, 763, 2, formatted_bio, center=False)
+                dest_ws.row_dimensions[763].height = h_bio
+
                 s9 = parsed_data["sec9"]
                 safe_write_force(dest_ws, 774, 2, s9.get("B170","").capitalize(), center=False)
                 flash_num = re.findall(r'(\d{2,3})', s9.get("B176",""))
@@ -1478,15 +1497,12 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                     r_match = re.search(r'([\d\.]+)', s9.get("B189","").replace("(20℃)", ""))
                     safe_write_force(dest_ws, 793, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
 
-                # [수정됨] E모드 Toxicity 및 Ecological 정보 매핑
                 for sr, er, ck in [(806, 1005, 'F'), (1007, 1206, 'G'), (1208, 1407, 'H'), (1416, 1615, 'P'), (1617, 1816, 'Q'), (1822, 2021, 'T'), (2023, 2222, 'U'), (2224, 2423, 'V')]:
                     fill_regulatory_section(dest_ws, sr, er, active_substances, eng_data_map, ck, mode=option)
 
-                # [수정됨] E모드 표 사이 간격(Gap) 숨김처리
                 for r in [1006, 1207] + list(range(1408, 1416)) + [1616] + list(range(1817, 1822)) + [2022, 2223]: 
                     dest_ws.row_dimensions[r].hidden = True
 
-                # [수정됨] E모드 Sec 14 매핑
                 s14 = parsed_data["sec14"]
                 un_raw = str(s14.get("UN", "")).strip()
                 un_val = re.sub(r"\D", "", un_raw)
