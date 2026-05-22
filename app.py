@@ -477,6 +477,1214 @@ def process_ifra(pdf_file, customer_name, product_name, mode):
     output_io.seek(0)
     return output_io, f"{product_name} IFRA 51TH.docx"
 
+def get_master_data_path():
+    try: base_path = sys._MEIPASS
+    except Exception: base_path = os.path.abspath(".")
+    p1 = os.path.join(base_path, "data", "master_data.xlsx")
+    if os.path.exists(p1): return p1
+    p2 = os.path.join(base_path, "master_data.xlsx")
+    if os.path.exists(p2): return p2
+    for root, dirs, files in os.walk(base_path):
+        for f in files:
+            if "master_data" in f and f.endswith(".xlsx") and not f.startswith("~"):
+                return os.path.join(root, f)
+    return None
+
+FONT_STYLE = Font(name='굴림', size=8)
+ALIGN_LEFT = Alignment(horizontal='left', vertical='center', wrap_text=True)
+ALIGN_CENTER = Alignment(horizontal='center', vertical='center', wrap_text=True)
+ALIGN_TITLE = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+def safe_write_force(ws, row, col, value, center=False):
+    cell = ws.cell(row=row, column=col)
+    try: cell.value = value
+    except AttributeError:
+        try:
+            for rng in list(ws.merged_cells.ranges):
+                if cell.coordinate in rng:
+                    ws.unmerge_cells(str(rng))
+                    cell = ws.cell(row=row, column=col)
+                    break
+            cell.value = value
+        except: pass
+    if cell.font.name != '굴림': cell.font = FONT_STYLE
+    if center: cell.alignment = ALIGN_CENTER
+    else: cell.alignment = ALIGN_LEFT
+
+def get_description_smart(code, code_map):
+    clean_code = str(code).replace(" ", "").upper().strip()
+    if clean_code in code_map: return code_map[clean_code]
+    if "+" in clean_code:
+        parts = clean_code.split("+")
+        found_texts = [code_map[p] for p in parts if p in code_map]
+        if found_texts: return " ".join(found_texts)
+    return ""
+
+def calculate_smart_height_basic(text, mode="CFF(K)"): 
+    if not text: return 19.2
+    lines = str(text).split('\n')
+    total_visual_lines = 0
+    if "E" in mode:
+        char_limit = 58.0
+        for line in lines:
+            if len(line) == 0: total_visual_lines += 1
+            else:
+                words = line.split(" "); current_len = 0; lines_for_this_paragraph = 1
+                for word in words:
+                    if current_len == 0: current_len = len(word)
+                    elif current_len + 1 + len(word) <= char_limit: current_len += 1 + len(word)
+                    else: lines_for_this_paragraph += 1; current_len = len(word)
+                total_visual_lines += lines_for_this_paragraph
+        clean_check = re.sub(r'[\s]+', '', str(text).lower())
+        if "rinsecautiouslywithwater" in clean_check and "removecontactlenses" in clean_check:
+            if total_visual_lines < 3: total_visual_lines = 3
+        if total_visual_lines <= 1: return 18.75
+        elif total_visual_lines == 2: return 25.5
+        elif total_visual_lines == 3: return 36.0
+        elif total_visual_lines == 4: return 44.0
+        elif total_visual_lines == 5: return 54.0
+        else: return 64.0 + (total_visual_lines - 6) * 10.0
+    else:
+        char_limit = 45.0
+        for line in lines:
+            if len(line) == 0: total_visual_lines += 1
+            else: total_visual_lines += math.ceil(len(line) / char_limit)
+        if total_visual_lines <= 1: return 19.2
+        elif total_visual_lines == 2: return 26.0
+        elif total_visual_lines == 3: return 36.0
+        else: return 45.0
+
+def format_and_calc_height_sec47(text, mode="CFF(K)"):
+    if not text: return "", 19.2
+    if "E" in mode:
+        keywords = r"(IF|If|Get|When|Wash|Remove|Take|Prevent|Call|Move|Settle|Please|After|Should|Rescuer|For|Do|Wipe|Follow|Stop|Collect|Make|Absorb|Put|Since|Contaminated|Without|Empty|Keep|Store|The|It|Some|During|Containers)"
+        formatted_text = re.sub(r'(?<=[a-z0-9\)\]\.\;])\s+(' + keywords + r'\b)', r'\n\1', text)
+        formatted_text = re.sub(r'\.([A-Z])', r'.\n\1', formatted_text).replace("Follow\nStop", "Follow Stop")
+        formatted_text = re.sub(r'\band\s*\n\s*([A-Z])', r'and \1', formatted_text)
+        formatted_text = re.sub(r'unattended\.\s*\n\s*If', 'unattended. If', formatted_text)
+        formatted_text = re.sub(r'minutes\.\s*\n\s*Remove', 'minutes. Remove', formatted_text)
+        formatted_text = re.sub(r'do\.\s*\n\s*Continue', 'do. Continue', formatted_text)
+        lines = [line.strip() for line in formatted_text.split('\n') if line.strip()]
+        final_text = "\n".join(lines)
+        total_visual_lines = 0
+        for line in lines:
+            if len(line) == 0: total_visual_lines += 1
+            else:
+                words = line.split(" "); current_len = 0; lines_for_this_paragraph = 1
+                for word in words:
+                    if current_len == 0: current_len = len(word)
+                    elif current_len + 1 + len(word) <= 73.0: current_len += 1 + len(word)
+                    else: lines_for_this_paragraph += 1; current_len = len(word)
+                total_visual_lines += lines_for_this_paragraph
+        if total_visual_lines == 0: total_visual_lines = 1
+        height = max(total_visual_lines * 12.0, 24.0)
+        return final_text, height
+    else:
+        formatted_text = re.sub(r'(?<!\d)\.(?!\d)(?!\n)', '.\n', text)
+        lines = [line.strip() for line in formatted_text.split('\n') if line.strip()]
+        final_text = "\n".join(lines)
+        total_visual_lines = 0
+        for line in lines:
+            line_len = sum(2 if '가' <= ch <= '힣' else 1.1 for ch in line)
+            visual_lines = max(math.ceil(line_len / 90.0), 1)
+            total_visual_lines += visual_lines
+        if total_visual_lines == 0: total_visual_lines = 1
+        height = max((total_visual_lines * 10) + 10, 24.0)
+        return final_text, height
+
+def fill_fixed_range(ws, start_row, end_row, codes, code_map, mode="CFF(K)"):
+    unique_codes = []; seen = set()
+    for c in codes:
+        clean = c.replace(" ", "").upper().strip()
+        if clean not in seen: unique_codes.append(clean); seen.add(clean)
+    limit = end_row - start_row + 1
+    for i in range(limit):
+        current_row = start_row + i
+        if i < len(unique_codes):
+            code = unique_codes[i]
+            desc = get_description_smart(code, code_map)
+            ws.row_dimensions[current_row].hidden = False
+            ws.row_dimensions[current_row].height = calculate_smart_height_basic(desc, mode)
+            safe_write_force(ws, current_row, 2, code, center=False)
+            safe_write_force(ws, current_row, 4, desc, center=False)
+        else:
+            if "K" in mode and current_row in [25, 46, 66, 86, 106]:
+                ws.row_dimensions[current_row].hidden = False
+                safe_write_force(ws, current_row, 2, "")
+                safe_write_force(ws, current_row, 4, "자료없음", center=False)
+            elif "E" in mode and current_row in [24, 45, 65, 85, 105]:
+                ws.row_dimensions[current_row].hidden = False
+                safe_write_force(ws, current_row, 2, "")
+                safe_write_force(ws, current_row, 4, "no data available", center=False)
+            else:
+                ws.row_dimensions[current_row].hidden = True
+                safe_write_force(ws, current_row, 2, "") 
+                safe_write_force(ws, current_row, 4, "")
+
+def fill_composition_data(ws, comp_data, cas_to_name_map, mode="CFF(K)"):
+    if mode in ["CFF(K)", "HP(K)"]:
+        start_row = 133
+        end_row = 332
+    else:
+        start_row = 132
+        end_row = 331
+        
+    limit = end_row - start_row + 1
+    for i in range(limit):
+        current_row = start_row + i
+        
+        # [수정됨] D열(4번째 컬럼) 가운데 맞춤 강제 적용
+        try:
+            ws.cell(row=current_row, column=4).alignment = ALIGN_CENTER
+        except:
+            pass
+
+        if i < len(comp_data):
+            cas_no, concentration = comp_data[i]
+            chem_name = cas_to_name_map.get(cas_no.replace(" ", "").strip(), "")
+            ws.row_dimensions[current_row].hidden = False
+            ws.row_dimensions[current_row].height = 26.7
+            safe_write_force(ws, current_row, 1, chem_name, center=False)
+            safe_write_force(ws, current_row, 4, cas_no, center=True) # 가운데 정렬
+            safe_write_force(ws, current_row, 6, concentration if concentration else "", center=True)
+        else:
+            ws.row_dimensions[current_row].hidden = True
+            safe_write_force(ws, current_row, 1, ""); safe_write_force(ws, current_row, 4, ""); safe_write_force(ws, current_row, 6, "")
+
+def fill_regulatory_section(ws, start_row, end_row, substances, data_map, col_key, mode="CFF(K)"):
+    limit = end_row - start_row + 1
+    for i in range(limit):
+        current_row = start_row + i
+        if i < len(substances):
+            substance_name = substances[i]
+            safe_write_force(ws, current_row, 1, substance_name, center=False)
+            cell_data = str(data_map.get(substance_name, {}).get(col_key, "")) if substance_name in data_map else ""
+            
+            if cell_data == "nan": 
+                cell_data = ""
+                
+            safe_write_force(ws, current_row, 2, cell_data, center=False)
+            ws.row_dimensions[current_row].hidden = False
+            
+            _, h = format_and_calc_height_sec47(cell_data, mode=mode)
+            ws.row_dimensions[current_row].height = max(h, 24.0)
+        else:
+            safe_write_force(ws, current_row, 1, "")
+            safe_write_force(ws, current_row, 2, "")
+            ws.row_dimensions[current_row].hidden = True
+
+def auto_crop(pil_img):
+    try:
+        if pil_img.mode != 'RGB':
+            bg = PILImage.new('RGB', pil_img.size, (255, 255, 255))
+            if pil_img.mode == 'RGBA': bg.paste(pil_img, mask=pil_img.split()[3])
+            else: bg.paste(pil_img)
+            pil_img = bg
+        bbox = ImageChops.invert(pil_img).getbbox()
+        return pil_img.crop(bbox) if bbox else pil_img
+    except: return pil_img
+
+def normalize_image_legacy(pil_img):
+    try:
+        if pil_img.mode in ('RGBA', 'LA') or (pil_img.mode == 'P' and 'transparency' in pil_img.info):
+            background = PILImage.new('RGB', pil_img.size, (255, 255, 255))
+            if pil_img.mode == 'P': pil_img = pil_img.convert('RGBA')
+            background.paste(pil_img, mask=pil_img.split()[3])
+            pil_img = background
+        else: pil_img = pil_img.convert('RGB')
+        return pil_img.resize((32, 32)).convert('L')
+    except: return pil_img.resize((32, 32)).convert('L')
+
+def normalize_image_smart(pil_img):
+    try: return auto_crop(pil_img).resize((64, 64)).convert('L')
+    except: return pil_img.resize((64, 64)).convert('L')
+
+def get_reference_images():
+    img_folder = get_resource_path("reference_imgs")
+    if not os.path.exists(img_folder): return {}, False
+    try:
+        ref_images = {}
+        for fname in sorted(os.listdir(img_folder)):
+            if fname.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.tif', '.tiff')):
+                try: ref_images[fname] = PILImage.open(os.path.join(img_folder, fname))
+                except: continue
+        return ref_images, True
+    except: return {}, False
+
+def is_blue_dominant(pil_img):
+    try:
+        img = pil_img.resize((50, 50)).convert('RGB')
+        data = np.array(img)
+        r, g, b = data[:,:,0].astype(int), data[:,:,1].astype(int), data[:,:,2].astype(int)
+        blue_mask = (b > r + 30) & (b > g + 30)
+        return (np.sum(blue_mask) / 2500) > 0.05
+    except: return False
+
+def is_square_shaped(width, height): return height != 0 and 0.8 < (width / height) < 1.2 
+
+def find_best_match_name(src_img, ref_images, mode="CFF(K)"):
+    best_score = float('inf'); best_name = None
+    if mode in ["HP(K)", "HP(E)"]: src_norm = normalize_image_smart(src_img); threshold = 70 
+    else: src_norm = normalize_image_legacy(src_img); threshold = 65
+    try:
+        src_arr = np.array(src_norm, dtype='int16')
+        for name, ref_img in ref_images.items():
+            ref_norm = normalize_image_smart(ref_img) if mode in ["HP(K)", "HP(E)"] else normalize_image_legacy(ref_img)
+            diff = np.mean(np.abs(src_arr - np.array(ref_norm, dtype='int16')))
+            if diff < best_score: best_score = diff; best_name = name
+        return best_name if best_score < threshold else None
+    except: return None
+
+def extract_number(filename):
+    nums = re.findall(r'\d+', filename)
+    return int(nums[0]) if nums else 999
+
+def extract_codes_ordered(text):
+    return list(dict.fromkeys([c.replace(" ", "").upper() for c in re.findall(r"([HP]\s?\d{3}(?:\s*\+\s*[HP]\s?\d{3})*)", text)]))
+
+def get_clustered_lines(doc):
+    all_lines = []
+    noise_regexs = [
+        r'^\s*\d+\s*/\s*\d+\s*$', r'물질안전보건자료', r'Material Safety Data Sheet', 
+        r'PAGE', r'Ver\.\s*:?\s*\d+\.?\d*', r'발행일\s*:?.*', r'Date of issue',
+        r'주식회사\s*고려.*', r'Cff', r'Corea\s*flavors.*', r'제\s*품\s*명\s*:?.*',
+        r'according to the Global Harmonized System', r'Product Name', r'Date\s*:\s*\d{2}\.[a-zA-Z]{3}\.\d{4}'
+    ]
+    global_y_offset = 0
+    for page in doc:
+        page_h = page.rect.height
+        clip_rect = fitz.Rect(0, 60, page.rect.width, page_h - 50)
+        words = sorted(page.get_text("words", clip=clip_rect), key=lambda w: w[1]) 
+        rows = []
+        if words:
+            current_row = [words[0]]; row_base_y = words[0][1]
+            for w in words[1:]:
+                if abs(w[1] - row_base_y) < 8: current_row.append(w)
+                else: rows.append(sorted(current_row, key=lambda x: x[0])); current_row = [w]; row_base_y = w[1]
+            if current_row: rows.append(sorted(current_row, key=lambda x: x[0]))
+        for row in rows:
+            line_text = " ".join([w[4] for w in row])
+            if not any(re.search(pat, line_text, re.IGNORECASE) for pat in noise_regexs):
+                avg_y = sum([w[1] for w in row]) / len(row)
+                all_lines.append({
+                    'text': line_text, 'global_y0': avg_y + global_y_offset,
+                    'global_y1': (sum([w[3] for w in row]) / len(row)) + global_y_offset
+                })
+        global_y_offset += page_h
+    return all_lines
+
+def extract_section_smart(all_lines, start_kw, end_kw, mode="CFF(K)"):
+    start_idx = end_idx = -1
+    clean_start_kw = start_kw.replace(" ", "")
+    for i, line in enumerate(all_lines):
+        check = line['text'].replace(" ", "").lower() if "E" in mode else line['text'].replace(" ", "")
+        target = clean_start_kw.lower() if "E" in mode else clean_start_kw
+        if target in check: start_idx = i; break
+    if start_idx == -1: return ""
+    clean_end_kws = [k.replace(" ", "") for k in (end_kw if isinstance(end_kw, list) else [end_kw])]
+    for i in range(start_idx + 1, len(all_lines)):
+        line_clean = all_lines[i]['text'].replace(" ", "").lower() if "E" in mode else all_lines[i]['text'].replace(" ", "")
+        if any((cek.lower() if "E" in mode else cek) in line_clean for cek in clean_end_kws): end_idx = i; break
+    if end_idx == -1: end_idx = len(all_lines)
+    target_lines_raw = all_lines[start_idx : end_idx]
+    if not target_lines_raw: return ""
+    first_line = target_lines_raw[0].copy()
+    txt = first_line['text']
+    match = re.search(re.escape(start_kw).replace(r"\ ", r"\s*"), txt, re.IGNORECASE)
+    first_line['text'] = re.sub(r"^[:\.\-\s]+", "", txt[match.end():].strip()) if match else (txt.split(start_kw, 1)[1].strip() if start_kw in txt else "")
+    target_lines = [first_line] if first_line['text'].strip() else []
+    target_lines.extend(target_lines_raw[1:])
+    if not target_lines: return ""
+
+    if mode == "CFF(E)": garbage_heads = ["Classification of the substance or mixture", "Classification of the substance or", "mixture", "Precautionary statements", "Hazard pictograms", "Signal word", "Hazard statements", "Response", "Storage", "Disposal", "Other hazards", "General advice", "In case of eye contact", "In case of skin contact", "If inhaled", "If swallowed", "Special note for doctors", "Extinguishing media", "Special hazards arising from the", "Advice for firefighters", "Personal precautions, protective", "Environmental precautions", "Methods and materials for containment", "Precautions for safe handling", "Conditions for safe storage, including", "Internal regulations", "ACGIH regulations", "Biological exposure standards", "arising from the", ", protective", "precautions", "and materials for containment", "for safe handling", "for safe storage, including", "conditions for safe storage, including"]; sensitive_garbage_regex = []
+    elif mode == "HP(E)": garbage_heads = ["Classification of the substance or mixture", "Classification of the substance or", "mixture", "Precautionary statements", "Hazard pictograms", "Signal word", "Hazard statements", "Response", "Storage", "Disposal", "Other hazards", "General advice", "In case of eye contact", "In case of skin contact", "If inhaled", "If swallowed", "Special note for doctors", "Extinguishing media", "Special hazards arising from the", "Advice for firefighters", "Personal precautions, protective", "Environmental precautions", "Methods and materials for containment", "Precautions for safe handling", "Conditions for safe storage, including", "Internal regulations", "ACGIH regulations", "Biological exposure standards", "arising from the", ", protective", "precautions", "and materials for containment", "for safe handling", "for safe storage, including", "conditions for safe storage, including", "equipment and emergency procedures", "and cleaning up", "any incompatibilities", "suitable (unsuitable) extinguishing media", "(unsuitable) extinguishing media", "specific hazards arising from the chemical", "specific hazards", "from the chemical", "special protective actions for firefighters", "special protective", "for firefighters", "handling", "incompatible materials", "safe storage", "contact with", ", including any incompatibilities", "including any incompatibilities"]; sensitive_garbage_regex = []
+    elif mode == "HP(K)": garbage_heads = ["에 접촉했을 때", "에 들어갔을 때", "들어갔을 때", "접촉했을 때", "했을 때", "흡입했을 때", "먹었을 때", "주의사항", "내용물", "취급요령", "저장방법", "보호구", "조치사항", "제거 방법", "소화제", "유해성", "로부터 생기는", "착용할 보호구", "예방조치", "방법", "경고표지 항목", "그림문자", "화학물질", "의사의 주의사항", "기타 의사의 주의사항", "필요한 정보", "관한 정보", "보호하기 위해 필요한 조치사항", "또는 제거 방법", "시 착용할 보호구 및 예방조치", "시 착용할 보호구", "부터 생기는 특정 유해성", "사의 주의사항", "(부적절한) 소화제", "및", "요령", "때", "항의", "색상", "인화점", "비중", "굴절률", "에 의한 규제", "의한 규제", "- 색", "(및 부적절한) 소화제", "특정 유해성", "보호하기 위해 필요한 조치 사항 및 보호구", "저장 방법"]; sensitive_garbage_regex = [r"^시\s+", r"^또는\s+", r"^의\s+"]
+    else: garbage_heads = ["에 접촉했을 때", "에 들어갔을 때", "들어갔을 때", "접촉했을 때", "했을 때", "흡입했을 때", "먹었을 때", "주의사항", "내용물", "취급요령", "저장방법", "보호구", "조치사항", "제거 방법", "소화제", "유해성", "로부터 생기는", "착용할 보호구", "예방조치", "방법", "경고표지 항목", "그림문자", "화학물질", "의사의 주의사항", "기타 의사의 주의사항", "필요한 정보", "관한 정보", "보호하기 위해 필요한 조치사항", "또는 제거 방법", "시 착용할 보호구 및 예방조치", "시 착용할 보호구", "부터 생기는 특정 유해성", "사의 주의사항", "(부적절한) 소화제", "및", "요령", "때", "항의", "색상", "인화점", "비중", "굴절률", "에 의한 규제", "의한 규제"]; sensitive_garbage_regex = [r"^시\s+", r"^또는\s+", r"^의\s+"]
+
+    cleaned_lines = []
+    for line in target_lines:
+        txt = re.sub(r'^\s*-\s*', '', line['text'].strip()).strip() if mode == "HP(K)" else line['text'].strip()
+        for _ in range(3):
+            changed = False
+            for gb in garbage_heads:
+                if txt.lower().replace(" ","").startswith(gb.lower().replace(" ","")):
+                    m = re.compile(r"^" + re.escape(gb).replace(r"\ ", r"\s*") + r"[\s\.:]*", re.IGNORECASE).match(txt)
+                    if m: txt = txt[m.end():].strip(); changed = True
+                    elif txt.lower().startswith(gb.lower()): txt = txt[len(gb):].strip(); changed = True
+            for pat in sensitive_garbage_regex:
+                m = re.search(pat, txt)
+                if m: txt = txt[m.end():].strip(); changed = True
+            txt = re.sub(r"^[:\.\)\s]+", "", txt)
+            if not changed: break
+        if txt:
+            line['text'] = re.sub(r'^\s*-\s*', '', txt).strip() if mode == "HP(K)" else txt
+            cleaned_lines.append(line)
+    
+    if not cleaned_lines: return ""
+    final_text = cleaned_lines[0]['text']
+    for i in range(1, len(cleaned_lines)):
+        prev, curr = cleaned_lines[i-1], cleaned_lines[i]
+        prev_txt, curr_txt = prev['text'].strip(), curr['text'].strip()
+        if mode in ["CFF(E)", "HP(E)"]:
+            final_text += ("\n" + curr_txt) if re.match(r"^(\-|•|\*|\d+\.)", curr_txt) or (curr['global_y0'] - prev['global_y1']) >= 3.0 else (" " + curr_txt)
+        else: 
+            if re.search(r"(\.|시오|음|함|것|임|있음|주의|금지|참조|따르시오|마시오)$", prev_txt) or re.match(r"^(\-|•|\*|\d+\.|[가-하]\.|\(\d+\))", curr_txt): final_text += "\n" + curr_txt
+            elif (curr['global_y0'] - prev['global_y1']) < 3.0: 
+                need_space = False
+                if prev_txt and curr_txt and 0xAC00 <= ord(prev_txt[-1]) <= 0xD7A3 and 0xAC00 <= ord(curr_txt[0]) <= 0xD7A3:
+                    if prev_txt[-1] in ['을','를','이','가','은','는','의','와','과','에','로','서','고','며','여','해','나','면','니','등','및','또는','경우',',',')','속'] or any(curr_txt.startswith(x) for x in ['및','또는','(','참고']): need_space = True
+                final_text += (" " + curr_txt) if need_space else curr_txt
+            else: final_text += "\n" + curr_txt
+    return final_text
+
+def parse_sec8_hp_content(text, mode="HP(K)"):
+    if not text or "자료없음" in text: return "자료없음"
+    valid_lines = []
+    
+    lines_to_parse = text.split("-") if "HP" in mode else text.split("\n")
+    
+    for chunk in lines_to_parse:
+        clean_chunk = chunk.strip()
+        if not clean_chunk: continue
+        if ":" in clean_chunk:
+            parts = clean_chunk.split(":", 1)
+            name_part, value_part = parts[0].strip(), parts[1].strip()
+            if any(x in value_part for x in ["해당없음", "자료없음"]): continue 
+            valid_lines.append(f"{name_part.replace('[', '').replace(']', '').strip()} : {value_part.replace('[', '').replace(']', '').strip()}")
+        elif not any(x in clean_chunk for x in ["해당없음", "자료없음"]):
+            valid_lines.append(clean_chunk.replace("[", "").replace("]", "").strip())
+            
+    return "\n".join(valid_lines) if valid_lines else "자료없음"
+
+def parse_pdf_final(doc, mode="CFF(K)"):
+    all_lines = get_clustered_lines(doc)
+    result = {"hazard_cls": [], "signal_word": "", "h_codes": [], "p_prev": [], "p_resp": [], "p_stor": [], "p_disp": [], "composition_data": [], "sec4_to_7": {}, "sec8": {}, "sec9": {}, "sec14": {}, "sec15": {}}
+    sec9_lines = []; start_9 = end_9 = -1
+    for i, line in enumerate(all_lines):
+        if "9. PHYSICAL" in line['text'].upper() or "9. 물리화학" in line['text']: start_9 = i
+        if "10. STABILITY" in line['text'].upper() or "10. 안정성" in line['text']: end_9 = i; break
+    if start_9 != -1: sec9_lines = all_lines[start_9:(end_9 if end_9 != -1 else len(all_lines))]
+
+    if mode == "HP(E)":
+        b19_clean = re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(all_lines, "A. GHS Classification", "B. GHS label elements", mode)).strip()
+        result["hazard_cls"] = [l.strip() for l in b19_clean.split('\n') if l.strip()]
+        result["signal_word"] = re.sub(r'^(?:[sS]\b)?[\s\-\○•]+', '', extract_section_smart(all_lines, "Signal word", "Hazard statement", mode).strip()).strip()
+        result["h_codes"] = extract_codes_ordered(extract_section_smart(all_lines, "Hazard statement", "Precautionary statement", mode))
+        result["p_prev"] = extract_codes_ordered(extract_section_smart(all_lines, "1) Prevention", "2) Response", mode))
+        result["p_resp"] = extract_codes_ordered(extract_section_smart(all_lines, "2) Response", "3) Storage", mode))
+        result["p_stor"] = extract_codes_ordered(extract_section_smart(all_lines, "3) Storage", "4) Disposal", mode))
+        result["p_disp"] = extract_codes_ordered(extract_section_smart(all_lines, "4) Disposal", "C. Other hazards", mode))
+
+        comp_text = extract_section_smart(all_lines, "3. Composition", ["4. FIRST-AID", "4. First aid"], mode)
+        regex_cas = re.compile(r'\b\d{2,7}-\d{2}-\d\b'); regex_conc = re.compile(r'\b(\d+(?:\.\d+)?)\s*(?:~|-)\s*(\d+(?:\.\d+)?)\b')
+        cas_list = regex_cas.findall(comp_text); conc_list = []
+        for match in regex_conc.finditer(regex_cas.sub(" ", comp_text)):
+            if float(match.group(1)) <= 100 and float(match.group(2)) <= 100: conc_list.append(f"{match.group(1)} ~ {match.group(2)}")
+        for i in range(max(len(cas_list), len(conc_list))):
+            result["composition_data"].append((cas_list[i] if i < len(cas_list) else "", conc_list[i] if i < len(conc_list) else ""))
+
+        sec5_lines = all_lines
+        for i, line in enumerate(all_lines):
+            if "5. FIREFIGHTING" in line['text'].upper(): sec5_lines = all_lines[i:]; break
+
+        data = {
+            "B125": extract_section_smart(all_lines, "4.1 General advice", "4.2 In case of eye contact", mode),
+            "B126": extract_section_smart(all_lines, "4.2 In case of eye contact", "4.3 In case of skin contact", mode),
+            "B127": extract_section_smart(all_lines, "4.3 In case of skin contact", "4.4 If inhaled", mode),
+            "B128": extract_section_smart(all_lines, "4.4 If inhaled", "4.5 If swallowed", mode),
+            "B129": extract_section_smart(all_lines, "4.5 If swallowed", "4.6 Special note for doctors", mode).replace("Medical personnel, and to ensure that take protection measures is recognized for its substance", ""),
+            "B132": extract_section_smart(all_lines, "5.1 Extinguishing media", "5.2 Special hazards", mode),
+            "B134": extract_section_smart(all_lines, "5.2 Special hazards", "5.3 Advice for firefighters", mode).replace("substance or mixture", ""),
+            "B136": extract_section_smart(all_lines, "5.3 Advice for firefighters", "6. Accidental", mode),
+            "B140": extract_section_smart(all_lines, "6.1 Personal precautions", "6.2 Environmental", mode).replace("equipment and emergency procedures", ""),
+            "B142": extract_section_smart(all_lines, "6.2 Environmental", "6.3 Methods", mode),
+            "B144": extract_section_smart(all_lines, "6.3 Methods", "7. Handling", mode).replace("and cleaning up", ""),
+            "B148": extract_section_smart(all_lines, "7.1 Precautions", "7.2 Conditions", mode),
+            "B150": extract_section_smart(all_lines, "7.2 Conditions", "8. Exposure", mode).replace("any incompatibilities", "")
+        }
+        result["sec4_to_7"] = data
+
+        result["sec8"] = {
+            "B154": extract_section_smart(all_lines, "Internal regulations", "ACGIH regulations", mode).replace("[", "").replace("]", ""),
+            "B156": extract_section_smart(all_lines, "ACGIH regulations", "Biological exposure", mode).replace("[", "").replace("]", ""),
+            "B763": extract_section_smart(all_lines, "Biological exposure", ["9. Physical", "9. PHYSICAL"], mode).replace("[", "").replace("]", "")
+        }
+
+        result["sec9"] = {
+            "B170": extract_section_smart(sec9_lines, "Color", "Odor", mode),
+            "B176": extract_section_smart(sec9_lines, "Flash point", "Evaporation rate", mode),
+            "B183": extract_section_smart(sec9_lines, "Specific gravity", "Partition coefficient", mode).replace("(20/20℃)", "").replace("(Water=1)", "").strip(),
+            "B189": extract_section_smart(sec9_lines, "Refractive index", "10. Stability", mode).replace("(20℃)", "").strip()
+        }
+
+        s14 = {}
+        s14["UN"] = re.sub(r'\D', '', extract_section_smart(all_lines, "14.1 UN number", "14.2 Proper", mode))
+        s14["NAME"] = re.sub(r'\([^)]*\)', '', re.sub(r'(?i)shipping\s*name', '', re.sub(r'(?i)proper\s*shipping\s*name', '', extract_section_smart(all_lines, "14.2 Proper", "14.3 Transport", mode)))).replace("-", "").strip()
+        class_match = re.search(r'(\d)', extract_section_smart(all_lines, "14.3 Transport hazard class", "14.4 Packing group", mode).replace("-", ""))
+        s14["CLASS"] = class_match.group(1) if class_match else ""
+        s14["PG"] = extract_section_smart(all_lines, "14.4 Packing group", "14.5 Environmental hazard", mode).replace("-", "").strip()
+        s14["ENV"] = extract_section_smart(all_lines, "14.5 Environmental hazard", "IATA", mode).replace("-", "").strip()
+        result["sec14"] = s14
+        result["sec15"] = {"DANGER": ""}
+        return result
+
+    if mode == "CFF(E)":
+        hazard_cls_lines = []
+        for line in re.sub(r'(Category\s*\d+[A-Za-z]?)', r'\1\n', extract_section_smart(all_lines, "2. Hazards identification", "2.2 Labelling", mode)).split('\n'):
+            line = line.strip()
+            if not line: continue
+            if "2.1 Classification" in line:
+                line = line.replace("2.1 Classification of the substance or", "").replace("mixture", "").strip()
+                if not line: continue 
+            if line.lower() not in ["mixture", "mixture."]: hazard_cls_lines.append(line)
+        result["hazard_cls"] = hazard_cls_lines
+
+        full_text = "\n".join([l['text'] for l in all_lines])
+        m_sig = re.search(r"Signal word\s*[:\-\s]*([A-Za-z]+)", full_text, re.IGNORECASE)
+        if m_sig: result["signal_word"] = m_sig.group(1).capitalize()
+        
+        seen = set()
+        for code_raw in re.compile(r"([HP]\s?\d{3}(?:\s*\+\s*[HP]\s?\d{3})*)").findall(extract_section_smart(all_lines, "2. Hazards", "3. Composition", mode)):
+            code = code_raw.replace(" ", "").upper()
+            if code in seen: continue
+            seen.add(code)
+            if code.startswith("H"): result["h_codes"].append(code)
+            elif code.startswith("P"):
+                p = code.split("+")[0]
+                if p.startswith("P2"): result["p_prev"].append(code)
+                elif p.startswith("P3"): result["p_resp"].append(code)
+                elif p.startswith("P4"): result["p_stor"].append(code)
+                elif p.startswith("P5"): result["p_disp"].append(code)
+
+        comp_text = extract_section_smart(all_lines, "3. Composition", "4. FIRST-AID", mode)
+        regex_cas = re.compile(r'\b\d{2,7}-\d{2}-\d\b'); regex_conc = re.compile(r'\b(\d+(?:\.\d+)?)\s*(?:~|-)\s*(\d+(?:\.\d+)?)\b')
+        cas_list = regex_cas.findall(comp_text); conc_list = []
+        for match in regex_conc.finditer(regex_cas.sub(" ", comp_text)):
+            if float(match.group(1)) <= 100 and float(match.group(2)) <= 100: conc_list.append(f"{match.group(1)} ~ {match.group(2)}")
+        for i in range(max(len(cas_list), len(conc_list))):
+            result["composition_data"].append((cas_list[i] if i < len(cas_list) else "", conc_list[i] if i < len(conc_list) else ""))
+
+        data = {
+            "B125": extract_section_smart(all_lines, "4.1 General advice", "4.2 In case of eye contact", mode),
+            "B126": extract_section_smart(all_lines, "4.2 In case of eye contact", "4.3 In case of skin contact", mode),
+            "B127": extract_section_smart(all_lines, "4.3 In case of skin contact", "4.4 If inhaled", mode),
+            "B128": extract_section_smart(all_lines, "4.4 If inhaled", "4.5 If swallowed", mode),
+            "B129": extract_section_smart(all_lines, "4.5 If swallowed", "4.6 Special note for doctors", mode).replace("Medical personnel, and to ensure that take protection measures is recognized for its substance", ""),
+            "B132": extract_section_smart(all_lines, "5.1 Extinguishing media", "5.2 Special hazards", mode),
+            "B134": extract_section_smart(all_lines, "5.2 Special hazards", "5.3 Advice for firefighters", mode).replace("substance or mixture", ""),
+            "B136": extract_section_smart(all_lines, "5.3 Advice for firefighters", "6. Accidental", mode),
+            "B140": extract_section_smart(all_lines, "6.1 Personal precautions", "6.2 Environmental", mode).replace("equipment and emergency procedures", ""),
+            "B142": extract_section_smart(all_lines, "6.2 Environmental", "6.3 Methods", mode),
+            "B144": extract_section_smart(all_lines, "6.3 Methods", "7. Handling", mode).replace("and cleaning up", ""),
+            "B148": extract_section_smart(all_lines, "7.1 Precautions", "7.2 Conditions", mode),
+            "B150": extract_section_smart(all_lines, "7.2 Conditions", "8. Exposure", mode).replace("any incompatibilities", "")
+        }
+        result["sec4_to_7"] = data
+
+        result["sec8"] = {
+            "B154": extract_section_smart(all_lines, "Internal regulations", "ACGIH regulations", mode).replace("[", "").replace("]", ""),
+            "B156": extract_section_smart(all_lines, "ACGIH regulations", "Biological exposure", mode).replace("[", "").replace("]", ""),
+            "B763": extract_section_smart(all_lines, "Biological exposure", ["9. Physical", "9. PHYSICAL"], mode).replace("[", "").replace("]", "")
+        }
+
+        result["sec9"] = {
+            "B170": extract_section_smart(sec9_lines, "Color", "Odor", mode),
+            "B176": extract_section_smart(sec9_lines, "Flash point", "Evaporation rate", mode),
+            "B183": extract_section_smart(sec9_lines, "Specific gravity", "Partition coefficient", mode).replace("(20/20℃)", "").replace("(Water=1)", "").strip(),
+            "B189": extract_section_smart(sec9_lines, "Refractive index", "10. Stability", mode).replace("(20℃)", "").strip()
+        }
+
+        s14 = {}
+        s14["UN"] = re.sub(r'\D', '', extract_section_smart(all_lines, "14.1 UN number", "14.2 Proper", mode))
+        s14["NAME"] = re.sub(r'\([^)]*\)', '', re.sub(r'(?i)shipping\s*name', '', re.sub(r'(?i)proper\s*shipping\s*name', '', extract_section_smart(all_lines, "14.2 Proper", "14.3 Transport", mode)))).replace("-", "").strip()
+        class_match = re.search(r'(\d)', extract_section_smart(all_lines, "14.3 Transport hazard class", "14.4 Packing group", mode).replace("-", ""))
+        s14["CLASS"] = class_match.group(1) if class_match else ""
+        s14["PG"] = extract_section_smart(all_lines, "14.4 Packing group", "14.5 Environmental hazard", mode).replace("-", "").strip()
+        s14["ENV"] = extract_section_smart(all_lines, "14.5 Environmental hazard", "IATA", mode).replace("-", "").strip()
+        result["sec14"] = s14
+
+        return result
+
+    if mode == "CFF(K)":
+        for i in range(len(all_lines)):
+            if "적정선적명" in all_lines[i]['text'] and i > 0:
+                prev_line = all_lines[i-1]
+                if abs(prev_line['global_y0'] - all_lines[i]['global_y0']) < 20 and "적정선적명" not in prev_line['text'] and "유엔번호" not in prev_line['text']:
+                    all_lines[i]['text'] += " " + prev_line['text']; all_lines[i-1]['text'] = ""
+    
+    limit_y = 999999
+    for line in all_lines:
+        if "3. 구성성분" in line['text'] or "3. 성분" in line['text']: limit_y = line['global_y0']; break
+    full_text_hp = "\n".join([l['text'] for l in all_lines if l['global_y0'] < limit_y])
+    
+    signal_found = False
+    if mode == "HP(K)":
+        try:
+            start_sig = full_text_hp.find("신호어"); end_sig = full_text_hp.find("유해", start_sig)
+            if start_sig != -1 and end_sig != -1:
+                m = re.search(r"[-•]\s*(위험|경고)", full_text_hp[start_sig:end_sig])
+                if m: result["signal_word"] = m.group(1); signal_found = True
+        except: pass
+    if not signal_found:
+        for line in full_text_hp.split('\n'):
+            if "신호어" in line:
+                val = line.replace("신호어", "").replace(":", "").strip()
+                if val in ["위험", "경고"]: result["signal_word"] = val
+            elif line.strip() in ["위험", "경고"] and not result["signal_word"]:
+                result["signal_word"] = line.strip()
+    
+    if mode == "HP(K)":
+        state = 0
+        for l in full_text_hp.split('\n'):
+            if "가. 유해성" in l: state=1; continue
+            if "나. 예방조치" in l: state=0; continue
+            if state==1 and l.strip() and "공급자" not in l and "회사명" not in l:
+                clean_l = l.replace("-", "").strip()
+                if clean_l: result["hazard_cls"].append(clean_l)
+    else: 
+        state = 0
+        for l in full_text_hp.split('\n'):
+            l_ns = l.replace(" ", "")
+            if "2.유해성" in l_ns and "위험성" in l_ns: state = 1; continue 
+            if "나.예방조치" in l_ns: state = 0; continue
+            if state == 1 and l.strip():
+                if "가.유해성" in l_ns and "분류" in l_ns:
+                    check_header = re.sub(r'[가-하][\.\s]*유해성[\s\.\·ㆍ\-]*위험성[\s\.\·ㆍ\-]*분류[\s:]*', '', l).strip()
+                    if not check_header: continue 
+                    l = check_header
+                if "공급자" not in l and "회사명" not in l: result["hazard_cls"].append(l.strip())
+
+    all_matches = re.compile(r"([HP]\s?\d{3}(?:\s*\+\s*[HP]\s?\d{3})*)").findall(full_text_hp)
+    seen = set()
+    if "P321" in full_text_hp and "P321" not in all_matches: all_matches.append("P321")
+    for code_raw in all_matches:
+        code = code_raw.replace(" ", "").upper()
+        if code in seen: continue
+        seen.add(code)
+        if code.startswith("H"): result["h_codes"].append(code)
+        elif code.startswith("P"):
+            p = code.split("+")[0]
+            if p.startswith("P2"): result["p_prev"].append(code)
+            elif p.startswith("P3"): result["p_resp"].append(code)
+            elif p.startswith("P4"): result["p_stor"].append(code)
+            elif p.startswith("P5"): result["p_disp"].append(code)
+
+    regex_cas_strict = re.compile(r'\b(\d{2,7}\s*-\s*\d{2}\s*-\s*\d)\b')
+    regex_cas_ec_kill = re.compile(r'\b\d{2,7}\s*-\s*\d{2,3}\s*-\s*\d\b')
+    regex_tilde_range = re.compile(r'(\d+(?:\.\d+)?)\s*~\s*(\d+(?:\.\d+)?)') 
+    
+    in_comp = False
+    for line in all_lines:
+        txt = line['text']
+        if "3." in txt and ("성분" in txt or "Composition" in txt): in_comp=True; continue
+        if "4." in txt and ("응급" in txt or "First" in txt): in_comp=False; break
+        if in_comp:
+            if re.search(r'^\d+\.\d+', txt): continue 
+            c_val = cn_val = ""
+            if mode == "HP(K)":
+                cas_found = regex_cas_strict.findall(txt)
+                if cas_found:
+                    c_val = cas_found[0].replace(" ", "")
+                    txt_no_cas = re.sub(r'\b(?:(?:19|20)\d{2}-\d{1,2}-\d+|KE-\d+)\b', ' ', txt.replace(cas_found[0], " " * len(cas_found[0])), flags=re.IGNORECASE)
+                    m_range = re.search(r'\b(\d+(?:\.\d+)?)\s*(?:-|~)\s*(\d+(?:\.\d+)?)\b', txt_no_cas)
+                    if m_range:
+                        s, e = m_range.group(1), m_range.group(2)
+                        try:
+                            if float(s) <= 100 and float(e) <= 100: cn_val = f"{'0' if s=='1' else s} ~ {e}"
+                        except: pass
+                    if not cn_val:
+                        m_single = re.search(r'\b(\d+(?:\.\d+)?)\b', txt_no_cas)
+                        if m_single:
+                            try:
+                                if float(m_single.group(1)) <= 100: cn_val = m_single.group(1)
+                            except: pass
+            else:
+                cas_found = regex_cas_strict.findall(txt)
+                if cas_found: c_val = cas_found[0].replace(" ", "")
+                else:
+                    cas_found_loose = regex_cas_ec_kill.findall(txt)
+                    if cas_found_loose and re.match(r'\d{2,7}-\d{2}-\d', cas_found_loose[0].replace(" ", "")): c_val = cas_found_loose[0].replace(" ", "")
+                
+                txt_clean = re.sub(r'\b(?:(?:19|20)\d{2}-\d{1,2}-\d+|KE-\d+)\b', ' ', regex_cas_ec_kill.sub(" ", txt), flags=re.IGNORECASE)
+                m_tilde = regex_tilde_range.search(txt_clean)
+                if m_tilde:
+                    s, e = m_tilde.group(1), m_tilde.group(2)
+                    try:
+                        if float(s) <= 100 and float(e) <= 100: cn_val = f"{'0' if s=='1' else s} ~ {e}"
+                    except: pass
+            if c_val or cn_val: result["composition_data"].append((c_val, cn_val))
+
+    data = {}
+    if mode == "HP(K)":
+        data["B125"] = extract_section_smart(all_lines, "가. 눈에", "나. 피부", mode)
+        data["B126"] = extract_section_smart(all_lines, "나. 피부", "다. 흡입", mode)
+        data["B127"] = extract_section_smart(all_lines, "다. 흡입", "라. 먹었을", mode)
+        data["B128"] = extract_section_smart(all_lines, "라. 먹었을", "마. 기타", mode)
+        data["B129"] = extract_section_smart(all_lines, "마. 기타", ["5.", "폭발"], mode)
+        b132_raw = extract_section_smart(all_lines, "가. 적절한", "나. 화학물질", mode)
+        if "직사주수를 사용한" in b132_raw and "\n직사주수를" not in b132_raw: b132_raw = b132_raw.replace("직사주수를 사용한", "\n직사주수를 사용한")
+        data["B132"] = b132_raw
+        data["B133"] = re.sub(r'^(특정\s*유해성)\s*', '', extract_section_smart(all_lines, "나. 화학물질", "다. 화재진압", mode)).strip()
+        data["B134"] = extract_section_smart(all_lines, "다. 화재진압", ["6.", "누출"], mode)
+    else: 
+        data["B125"] = extract_section_smart(all_lines, "나. 눈", "다. 피부", mode)
+        data["B126"] = extract_section_smart(all_lines, "다. 피부", "라. 흡입", mode)
+        data["B127"] = extract_section_smart(all_lines, "라. 흡입", "마. 먹었을", mode)
+        data["B128"] = extract_section_smart(all_lines, "마. 먹었을", "바. 기타", mode)
+        data["B129"] = extract_section_smart(all_lines, "바. 기타", ["5.", "폭발"], mode)
+        data["B132"] = extract_section_smart(all_lines, "가. 적절한", "나. 화학물질", mode)
+        data["B133"] = re.sub(r'^(특정\s*유해성)\s*', '', extract_section_smart(all_lines, "나. 화학물질", "다. 화재진압", mode)).strip()
+        data["B134"] = extract_section_smart(all_lines, "다. 화재진압", ["6.", "누출"], mode)
+    
+    data["B138"] = extract_section_smart(all_lines, "가. 인체를", "나. 환경을", mode)
+    data["B139"] = extract_section_smart(all_lines, "나. 환경을", "다. 정화", mode)
+    data["B140"] = extract_section_smart(all_lines, "다. 정화", ["7.", "취급"], mode)
+    data["B143"] = extract_section_smart(all_lines, "가. 안전취급", "나. 안전한", mode)
+    data["B144"] = extract_section_smart(all_lines, "나. 안전한", ["8.", "노출"], mode)
+    result["sec4_to_7"] = data
+
+    sec8_lines = []; start_8 = end_8 = -1
+    for i, line in enumerate(all_lines):
+        if "8. 노출방지" in line['text']: start_8 = i
+        if "9. 물리화학" in line['text']: end_8 = i; break
+    if start_8 != -1: sec8_lines = all_lines[start_8:(end_8 if end_8 != -1 else len(all_lines))]
+    
+    if mode == "HP(K)":
+        result["sec8"] = {
+            "B358": parse_sec8_hp_content(extract_section_smart(sec8_lines, "국내노출기준", "ACGIH노출기준", mode), mode=mode), 
+            "B458": parse_sec8_hp_content(extract_section_smart(sec8_lines, "ACGIH노출기준", "생물학적", mode), mode=mode)
+        }
+        result["sec9"] = {
+            "B163": extract_section_smart(sec9_lines, "- 색", "나. 냄새", mode),
+            "B169": extract_section_smart(sec9_lines, "인화점", "아. 증발속도", mode),
+            "B176": extract_section_smart(sec9_lines, "비중", "거. n-옥탄올", mode),
+            "B182": extract_section_smart(sec9_lines, "굴절률", ["10. 안정성", "10. 화학적"], mode)
+        }
+    else:
+        result["sec8"] = {
+            "B358": parse_sec8_hp_content(extract_section_smart(sec8_lines, "국내규정", "ACGIH", mode), mode=mode), 
+            "B458": parse_sec8_hp_content(extract_section_smart(sec8_lines, "ACGIH", "생물학적", mode), mode=mode)
+        }
+        result["sec9"] = {
+            "B163": extract_section_smart(sec9_lines, "색상", "나. 냄새", mode),
+            "B169": extract_section_smart(sec9_lines, "인화점", "아. 증발속도", mode),
+            "B176": extract_section_smart(sec9_lines, "비중", "거. n-옥탄올", mode),
+            "B182": extract_section_smart(sec9_lines, "굴절률", ["10. 안정성", "10. 화학적"], mode)
+        }
+
+    sec14_lines = []; start_14 = end_14 = -1
+    for i, line in enumerate(all_lines):
+        if "14. 운송에" in line['text']: start_14 = i
+        if "15. 법적규제" in line['text']: end_14 = i; break
+    if start_14 != -1: sec14_lines = all_lines[start_14:(end_14 if end_14 != -1 else len(all_lines))]
+    
+    if mode == "HP(K)":
+        un_no = extract_section_smart(sec14_lines, "유엔번호", "나. 유엔", mode)
+        ship_name = extract_section_smart(sec14_lines, "유엔 적정 선적명", ["다. 운송에서의", "다.운송에서의"], mode)
+        class_raw = extract_section_smart(sec14_lines, "다. 운송에서의 위험성 등급", ["라. 용기등급", "라.용기등급"], mode)
+        pg_raw = re.sub(r'\(\s*IMDG\s*CODE\s*/\s*IATA\s*DGR\s*\)', '', extract_section_smart(sec14_lines, "라. 용기등급", ["마. 해양오염물질", "마.해양오염물질"], mode), flags=re.IGNORECASE).replace("-", "").strip()
+        env_raw = extract_section_smart(sec14_lines, "마. 해양오염물질", ["바. 사용자", "바.사용자"], mode).replace("-", "").strip()
+    else:
+        un_no = extract_section_smart(sec14_lines, "유엔번호", "나. 적정선적명", mode)
+        ship_name = extract_section_smart(sec14_lines, "적정선적명", ["다. 운송에서의", "다.운송에서의"], mode)
+        class_raw = extract_section_smart(sec14_lines, "다. 운송에서의 위험성 등급", ["라. 용기등급", "라.용기등급"], mode)
+        pg_raw = extract_section_smart(sec14_lines, "라. 용기등급", "마. 환경유해성", mode)
+        env_raw = extract_section_smart(sec14_lines, "마. 환경유해성", "IATA", mode)
+        
+    class_match = re.search(r'(\d)', class_raw)
+    result["sec14"] = {"UN": un_no, "NAME": ship_name, "CLASS": class_match.group(1) if class_match else "", "PG": pg_raw, "ENV": env_raw}
+
+    sec15_lines = []; start_15 = end_15 = -1
+    for i, line in enumerate(all_lines):
+        clean_txt = line['text'].replace(" ", "")
+        if "15.법적" in clean_txt: start_15 = i
+        if "16.그밖의" in clean_txt or "16.기타" in clean_txt: end_15 = i; break
+    sec15_lines = all_lines[start_15:(end_15 if end_15 != -1 else len(all_lines))] if start_15 != -1 else all_lines
+        
+    danger_act_text = extract_section_smart(sec15_lines, "위험물안전관리법에 의한 규제", ["마. 폐기물", "마.폐기물"], mode) or extract_section_smart(sec15_lines, "위험물안전관리법", ["마. 폐기물", "마.폐기물"], mode)
+    result["sec15"] = {"DANGER": danger_act_text, "FULL_TEXT": "\n".join([l['text'] for l in sec15_lines])}
+
+    return result
+
+def process_msds(uploaded_files, product_name_input, option, refractive_index_input, kor_excel_file, kor_form_version):
+    master_data_path = get_master_data_path()
+    if not master_data_path: return {"error": "내장된 중앙 데이터(master_data.xlsx)를 찾을 수 없습니다."}
+    loaded_refs, _ = get_reference_images()
+    
+    template_path = get_resource_path(os.path.join("MSDS templates", "MSDS 영문.xlsx" if option in ["CFF(E)", "HP(E)"] else "MSDS 국문.xlsx"))
+    if not os.path.exists(template_path): return {"error": f"템플릿을 찾을 수 없습니다: {template_path}"}
+    
+    new_files = []; new_download_data = {}
+    code_map = {}; cas_name_map = {}; kor_data_map = {}; eng_data_map = {}
+    
+    try:
+        xls = pd.ExcelFile(master_data_path)
+        sheet_names = xls.sheet_names
+        target_sheet = next((s for s in sheet_names if "위험" in s and "안전" in s), sheet_names[0])
+        df_code = pd.read_excel(master_data_path, sheet_name=target_sheet)
+        
+        if "K" in option:
+            target_col_idx = 1
+        else:
+            target_col_idx = 2
+            
+        for _, row in df_code.iterrows():
+            if pd.notna(row.iloc[0]):
+                code_map[str(row.iloc[0]).replace(" ","").upper().strip()] = str(row.iloc[target_col_idx]).strip() if len(row) > target_col_idx and pd.notna(row.iloc[target_col_idx]) else ""
+        
+        if "K" in option:
+            sheet_kor = next((s for s in sheet_names if "국문" in s), sheet_names[1] if len(sheet_names) > 1 else sheet_names[0])
+            for _, row in pd.read_excel(master_data_path, sheet_name=sheet_kor).iterrows():
+                if pd.notna(row.iloc[0]):
+                    c = str(row.iloc[0]).replace(" ", "").strip()
+                    n = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ""
+                    cas_name_map[c] = n
+                    if n:
+                        kor_data_map[n] = {
+                            'F': str(row.iloc[5]) if len(row) > 5 else "", 'G': str(row.iloc[6]) if len(row) > 6 else "", 
+                            'H': str(row.iloc[7]) if len(row) > 7 else "", 'P': str(row.iloc[15]) if len(row) > 15 else "", 
+                            'Q': str(row.iloc[16]) if len(row) > 16 else "", 'T': str(row.iloc[19]) if len(row) > 19 else "", 
+                            'U': str(row.iloc[20]) if len(row) > 20 else "", 'V': str(row.iloc[21]) if len(row) > 21 else ""
+                        }
+        else:
+            sheet_eng = next((s for s in sheet_names if "영문" in s), sheet_names[2] if len(sheet_names) > 2 else sheet_names[-1])
+            for _, row in pd.read_excel(master_data_path, sheet_name=sheet_eng).iterrows():
+                if pd.notna(row.iloc[0]):
+                    c = str(row.iloc[0]).replace(" ", "").strip()
+                    n = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ""
+                    cas_name_map[c] = n
+                    if n:
+                        eng_data_map[n] = {
+                            'F': str(row.iloc[5]) if len(row) > 5 else "", 'G': str(row.iloc[6]) if len(row) > 6 else "", 
+                            'H': str(row.iloc[7]) if len(row) > 7 else "", 'P': str(row.iloc[15]) if len(row) > 15 else "", 
+                            'Q': str(row.iloc[16]) if len(row) > 16 else "", 'T': str(row.iloc[19]) if len(row) > 19 else "", 
+                            'U': str(row.iloc[20]) if len(row) > 20 else "", 'V': str(row.iloc[21]) if len(row) > 21 else ""
+                        }
+    except Exception as e: return {"error": f"데이터 로드 오류: {e}"}
+
+    kor_override_data = None
+    if option in ["CFF(E)", "HP(E)"] and kor_excel_file is not None:
+        kor_excel_file.seek(0)
+        kor_ws = load_workbook(io.BytesIO(kor_excel_file.read()), data_only=True).active
+        kor_override_data = {"h_codes": [], "p_prev": [], "p_resp": [], "p_stor": [], "p_disp": [], "composition_data": []}
+        
+        def ext_codes(ws, s_r, e_r, col=2):
+            res = []; regex = re.compile(r"([HP]\d{3}(?:\+[HP]\d{3})*)")
+            for r in range(s_r, e_r + 1):
+                if not ws.row_dimensions[r].hidden and ws.cell(row=r, column=col).value:
+                    val_str = str(ws.cell(row=r, column=col).value).strip().upper()
+                    if re.match(r'^[HP]\s?\d{3}', val_str):
+                        for m in regex.findall(val_str.replace(" ", "")):
+                            if m not in res: res.append(m)
+            return res
+
+        def ext_comp(ws, s_r, e_r, cas_col=4, conc_col=6):
+            res = []; cas_regex = re.compile(r'(\d{2,7}\s*-\s*\d{2}\s*-\s*\d)')
+            for r in range(s_r, e_r + 1):
+                if not ws.row_dimensions[r].hidden:
+                    cas = ws.cell(row=r, column=cas_col).value
+                    if cas and str(cas).strip():
+                        match = cas_regex.search(str(cas).strip())
+                        if match: res.append((match.group(1).replace(" ", ""), str(ws.cell(row=r, column=conc_col).value).strip() if ws.cell(row=r, column=conc_col).value else ""))
+            return res
+
+        if "신버전" in kor_form_version:
+            kor_override_data["h_codes"] = ext_codes(kor_ws, 25, 44)
+            kor_override_data["p_prev"] = ext_codes(kor_ws, 46, 65)
+            kor_override_data["p_resp"] = ext_codes(kor_ws, 66, 85)
+            kor_override_data["p_stor"] = ext_codes(kor_ws, 86, 105)
+            kor_override_data["p_disp"] = ext_codes(kor_ws, 106, 125)
+            kor_override_data["composition_data"] = ext_comp(kor_ws, 133, 332)
+        else:
+            all_c = ext_codes(kor_ws, 25, 70)
+            kor_override_data["h_codes"] = [c for c in all_c if c.startswith('H')]
+            kor_override_data["p_prev"] = [c for c in all_c if c.startswith('P2')]
+            kor_override_data["p_resp"] = [c for c in all_c if c.startswith('P3')]
+            kor_override_data["p_stor"] = [c for c in all_c if c.startswith('P4')]
+            kor_override_data["p_disp"] = [c for c in all_c if c.startswith('P5')]
+            kor_override_data["composition_data"] = ext_comp(kor_ws, 25, 150)
+
+    for uploaded_file in uploaded_files:
+        try:
+            doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+            parsed_data = parse_pdf_final(doc, mode=option)
+            current_prod_name = product_name_input.strip() if product_name_input.strip() else uploaded_file.name.rsplit('.', 1)[0]
+            
+            if option in ["CFF(E)", "HP(E)"] and kor_override_data:
+                for k in ["h_codes", "p_prev", "p_resp", "p_stor", "p_disp", "composition_data"]: parsed_data[k] = kor_override_data[k]
+            
+            dest_wb = load_workbook(template_path); dest_ws = dest_wb.active; dest_wb.external_links = []
+            for row in dest_ws.iter_rows():
+                for cell in row:
+                    if not isinstance(cell, MergedCell) and cell.column == 2 and cell.data_type == 'f': cell.value = ""
+
+            if option == "HP(E)":
+                safe_write_force(dest_ws, 6, 2, current_prod_name, center=True)
+                safe_write_force(dest_ws, 9, 2, current_prod_name, center=False)
+                if parsed_data["hazard_cls"]:
+                    safe_write_force(dest_ws, 19, 2, "\n".join(parsed_data["hazard_cls"]), center=False)
+                    dest_ws.row_dimensions[19].height = len(parsed_data["hazard_cls"]) * 14.0
+                if parsed_data["signal_word"]: safe_write_force(dest_ws, 23, 2, parsed_data["signal_word"], center=False)
+                
+                fill_fixed_range(dest_ws, 24, 43, parsed_data["h_codes"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 45, 64, parsed_data["p_prev"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 65, 84, parsed_data["p_resp"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 85, 104, parsed_data["p_stor"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 105, 124, parsed_data["p_disp"], code_map, mode=option)
+                fill_composition_data(dest_ws, parsed_data["composition_data"], cas_name_map, mode=option)
+                
+                active_substances = [cas_name_map[c[0].replace(" ", "").strip()] for c in parsed_data["composition_data"] if c[0].replace(" ", "").strip() in cas_name_map and cas_name_map[c[0].replace(" ", "").strip()]]
+                
+                sd = parsed_data["sec4_to_7"]
+                cell_map_e = {
+                    "B334": sd.get("B125",""), "B335": sd.get("B126",""), "B336": sd.get("B127",""), "B337": sd.get("B128",""), "B338": sd.get("B129",""),
+                    "B341": sd.get("B132",""), "B343": sd.get("B134",""), "B345": sd.get("B136",""), "B349": sd.get("B140",""), "B351": sd.get("B142",""),
+                    "B353": sd.get("B144",""), "B357": sd.get("B148",""), "B359": sd.get("B150","")
+                }
+                for addr, val in cell_map_e.items():
+                    if val:
+                        formatted, h = format_and_calc_height_sec47(val, mode=option)
+                        r_idx = int(re.search(r'\d+', addr).group())
+                        safe_write_force(dest_ws, r_idx, 2, formatted, center=False)
+                        dest_ws.row_dimensions[r_idx].height = h
+
+                s8 = parsed_data["sec8"]
+                val_internal = s8.get("B154", "").replace("Not applicable", "no data available")
+                lines_internal = [l.strip() for l in val_internal.split('\n') if l.strip() and l.strip() != "no data available"]
+                if not lines_internal: lines_internal = ["no data available"]
+                for i in range(200):
+                    r = 363 + i
+                    if i < len(lines_internal):
+                        safe_write_force(dest_ws, r, 2, lines_internal[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
+
+                val_acgih = s8.get("B156", "").replace("Not applicable", "no data available")
+                lines_acgih = [l.strip() for l in val_acgih.split('\n') if l.strip() and l.strip() != "no data available"]
+                if not lines_acgih: lines_acgih = ["no data available"]
+                for i in range(200):
+                    r = 563 + i
+                    if i < len(lines_acgih):
+                        safe_write_force(dest_ws, r, 2, lines_acgih[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
+
+                val_bio = s8.get("B763", "").strip()
+                if not val_bio or "not applicable" in val_bio.lower() or "no data" in val_bio.lower(): 
+                    val_bio = "no data available"
+                formatted_bio, h_bio = format_and_calc_height_sec47(val_bio, mode=option)
+                safe_write_force(dest_ws, 763, 2, formatted_bio, center=False)
+                dest_ws.row_dimensions[763].height = h_bio
+
+                s9 = parsed_data["sec9"]
+                safe_write_force(dest_ws, 774, 2, s9.get("B170","").capitalize(), center=False)
+                flash_num = re.findall(r'(\d{2,3})', s9.get("B176",""))
+                safe_write_force(dest_ws, 780, 2, f"{flash_num[0]}℃" if flash_num else "", center=False)
+                
+                g_match = re.search(r'([\d\.]+)', s9.get("B183","").replace("(20/20℃)", "").replace("(Water=1)", ""))
+                safe_write_force(dest_ws, 787, 2, f"{g_match.group(1)} ± 0.01" if g_match else "", center=False)
+                
+                if refractive_index_input: safe_write_force(dest_ws, 793, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
+                else:
+                    r_match = re.search(r'([\d\.]+)', s9.get("B189","").replace("(20℃)", ""))
+                    safe_write_force(dest_ws, 793, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
+
+                for sr, er, ck in [(806, 1005, 'F'), (1007, 1206, 'G'), (1208, 1407, 'H'), (1416, 1615, 'P'), (1617, 1816, 'Q'), (1822, 2021, 'T'), (2023, 2222, 'U'), (2224, 2423, 'V')]:
+                    fill_regulatory_section(dest_ws, sr, er, active_substances, eng_data_map, ck, mode=option)
+
+                s14 = parsed_data["sec14"]
+                un_raw = str(s14.get("UN", "")).strip()
+                un_val = re.sub(r"\D", "", un_raw)
+                if not un_val or "no data" in un_raw.lower() or "not applicable" in un_raw.lower(): un_val = "no data available"
+                
+                name_raw = str(s14.get("NAME", "")).strip()
+                name_val = re.sub(r"\([^)]*\)", "", name_raw).strip()
+                if not name_val or "no data" in name_raw.lower() or "not applicable" in name_raw.lower(): name_val = "no data available"
+                
+                class_val = str(s14.get("CLASS", "")).strip()
+                pg_val = str(s14.get("PG", "")).strip()
+                env_val = str(s14.get("ENV", "")).strip()
+                
+                for i, v in enumerate([un_val, name_val, class_val if class_val and "not applicable" not in class_val.lower() else "Not applicable", pg_val if pg_val and "not applicable" not in pg_val.lower() else "Not applicable", env_val if env_val and "not applicable" not in env_val.lower() else "Not applicable"]):
+                    safe_write_force(dest_ws, 2435+i, 2, v, center=False)
+
+                safe_write_force(dest_ws, 2448, 1, f"16.2 Date of Issue : {datetime.now().strftime('%d. %b. %Y').upper()}", center=False)
+
+            elif option == "CFF(E)":
+                safe_write_force(dest_ws, 6, 2, current_prod_name, center=True)
+                safe_write_force(dest_ws, 9, 2, current_prod_name, center=False)
+                if parsed_data["hazard_cls"]:
+                    safe_write_force(dest_ws, 19, 2, "\n".join(parsed_data["hazard_cls"]), center=False)
+                    dest_ws.row_dimensions[19].height = len(parsed_data["hazard_cls"]) * 14.0
+                if parsed_data["signal_word"]: safe_write_force(dest_ws, 23, 2, parsed_data["signal_word"], center=False)
+                
+                fill_fixed_range(dest_ws, 24, 43, parsed_data["h_codes"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 45, 64, parsed_data["p_prev"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 65, 84, parsed_data["p_resp"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 85, 104, parsed_data["p_stor"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 105, 124, parsed_data["p_disp"], code_map, mode=option)
+                fill_composition_data(dest_ws, parsed_data["composition_data"], cas_name_map, mode=option)
+                
+                active_substances = [cas_name_map[c[0].replace(" ", "").strip()] for c in parsed_data["composition_data"] if c[0].replace(" ", "").strip() in cas_name_map and cas_name_map[c[0].replace(" ", "").strip()]]
+                
+                sd = parsed_data["sec4_to_7"]
+                cell_map_e = {
+                    "B334": sd.get("B125",""), "B335": sd.get("B126",""), "B336": sd.get("B127",""), "B337": sd.get("B128",""), "B338": sd.get("B129",""),
+                    "B341": sd.get("B132",""), "B343": sd.get("B134",""), "B345": sd.get("B136",""), "B349": sd.get("B140",""), "B351": sd.get("B142",""),
+                    "B353": sd.get("B144",""), "B357": sd.get("B148",""), "B359": sd.get("B150","")
+                }
+                for addr, val in cell_map_e.items():
+                    if val:
+                        formatted, h = format_and_calc_height_sec47(val, mode=option)
+                        r_idx = int(re.search(r'\d+', addr).group())
+                        safe_write_force(dest_ws, r_idx, 2, formatted, center=False)
+                        dest_ws.row_dimensions[r_idx].height = h
+
+                s8 = parsed_data["sec8"]
+                val_internal = s8.get("B154", "").replace("Not applicable", "no data available")
+                lines_internal = [l.strip() for l in val_internal.split('\n') if l.strip() and l.strip() != "no data available"]
+                if not lines_internal: lines_internal = ["no data available"]
+                for i in range(200):
+                    r = 363 + i
+                    if i < len(lines_internal):
+                        safe_write_force(dest_ws, r, 2, lines_internal[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
+
+                val_acgih = s8.get("B156", "").replace("Not applicable", "no data available")
+                lines_acgih = [l.strip() for l in val_acgih.split('\n') if l.strip() and l.strip() != "no data available"]
+                if not lines_acgih: lines_acgih = ["no data available"]
+                for i in range(200):
+                    r = 563 + i
+                    if i < len(lines_acgih):
+                        safe_write_force(dest_ws, r, 2, lines_acgih[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
+
+                val_bio = s8.get("B763", "").strip()
+                if not val_bio or "not applicable" in val_bio.lower() or "no data" in val_bio.lower(): 
+                    val_bio = "no data available"
+                formatted_bio, h_bio = format_and_calc_height_sec47(val_bio, mode=option)
+                safe_write_force(dest_ws, 763, 2, formatted_bio, center=False)
+                dest_ws.row_dimensions[763].height = h_bio
+
+                s9 = parsed_data["sec9"]
+                safe_write_force(dest_ws, 774, 2, s9.get("B170","").capitalize(), center=False)
+                flash_num = re.findall(r'(\d{2,3})', s9.get("B176",""))
+                safe_write_force(dest_ws, 780, 2, f"{flash_num[0]}℃" if flash_num else "", center=False)
+                
+                g_match = re.search(r'([\d\.]+)', s9.get("B183","").replace("(20/20℃)", "").replace("(Water=1)", ""))
+                safe_write_force(dest_ws, 787, 2, f"{g_match.group(1)} ± 0.01" if g_match else "", center=False)
+                
+                if refractive_index_input: safe_write_force(dest_ws, 793, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
+                else:
+                    r_match = re.search(r'([\d\.]+)', s9.get("B189","").replace("(20℃)", ""))
+                    safe_write_force(dest_ws, 793, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
+
+                for sr, er, ck in [(806, 1005, 'F'), (1007, 1206, 'G'), (1208, 1407, 'H'), (1416, 1615, 'P'), (1617, 1816, 'Q'), (1822, 2021, 'T'), (2023, 2222, 'U'), (2224, 2423, 'V')]:
+                    fill_regulatory_section(dest_ws, sr, er, active_substances, eng_data_map, ck, mode=option)
+
+                s14 = parsed_data["sec14"]
+                un_raw = str(s14.get("UN", "")).strip()
+                un_val = re.sub(r"\D", "", un_raw)
+                if not un_val or "no data" in un_raw.lower() or "not applicable" in un_raw.lower(): un_val = "no data available"
+                
+                name_raw = str(s14.get("NAME", "")).strip()
+                name_val = re.sub(r"\([^)]*\)", "", name_raw).strip()
+                if not name_val or "no data" in name_raw.lower() or "not applicable" in name_raw.lower(): name_val = "no data available"
+                
+                class_val = str(s14.get("CLASS", "")).strip()
+                pg_val = str(s14.get("PG", "")).strip()
+                env_val = str(s14.get("ENV", "")).strip()
+                
+                for i, v in enumerate([un_val, name_val, class_val if class_val and "not applicable" not in class_val.lower() else "Not applicable", pg_val if pg_val and "not applicable" not in pg_val.lower() else "Not applicable", env_val if env_val and "not applicable" not in env_val.lower() else "Not applicable"]):
+                    safe_write_force(dest_ws, 2435+i, 2, v, center=False)
+
+                safe_write_force(dest_ws, 2448, 1, f"16.2 Date of Issue : {datetime.now().strftime('%d. %b. %Y').upper()}", center=False)
+
+            else: # CFF(K) / HP(K)
+                safe_write_force(dest_ws, 7, 2, current_prod_name, center=True); safe_write_force(dest_ws, 10, 2, current_prod_name, center=False)
+                if parsed_data["hazard_cls"]:
+                    clean_hazard_text = "\n".join([line for line in parsed_data["hazard_cls"] if line.strip()])
+                    safe_write_force(dest_ws, 20, 2, clean_hazard_text, center=False)
+                    dest_ws['B20'].alignment = Alignment(wrap_text=True, vertical='center', horizontal='left')
+                    valid_lines_count = len([line for line in parsed_data["hazard_cls"] if line.strip()])
+                    if valid_lines_count > 0: dest_ws.row_dimensions[20].height = valid_lines_count * 14.0
+
+                safe_write_force(dest_ws, 24, 2, parsed_data["signal_word"] if parsed_data["signal_word"] else "", center=False) 
+                
+                if option == "HP(K)":
+                    for r, v in [(46, "예방"), (66, "대응"), (86, "저장"), (106, "폐기")]: safe_write_force(dest_ws, r, 1, v, center=False)
+
+                fill_fixed_range(dest_ws, 25, 44, parsed_data["h_codes"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 46, 65, parsed_data["p_prev"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 66, 85, parsed_data["p_resp"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 86, 105, parsed_data["p_stor"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 106, 125, parsed_data["p_disp"], code_map, mode=option)
+                fill_composition_data(dest_ws, parsed_data["composition_data"], cas_name_map, mode=option)
+                
+                active_substances = [cas_name_map[c[0].replace(" ", "").strip()] for c in parsed_data["composition_data"] if c[0].replace(" ", "").strip() in cas_name_map and cas_name_map[c[0].replace(" ", "").strip()]]
+
+                for cell_addr, raw_text in parsed_data["sec4_to_7"].items():
+                    formatted_txt, row_h = format_and_calc_height_sec47(raw_text, mode=option)
+                    try:
+                        col_idx = openpyxl.utils.column_index_from_string(re.match(r"([A-Z]+)", cell_addr).group(1))
+                        row_num = int(re.search(r"(\d+)", cell_addr).group(1))
+                        
+                        if option in ["HP(K)", "CFF(K)"]:
+                            row_num += 210
+                            
+                        safe_write_force(dest_ws, row_num, col_idx, "")
+                        if formatted_txt:
+                            safe_write_force(dest_ws, row_num, col_idx, formatted_txt, center=False)
+                            dest_ws.row_dimensions[row_num].height = row_h
+                            try:
+                                cell_a = dest_ws.cell(row=row_num, column=1)
+                                if cell_a.value: cell_a.value = str(cell_a.value).strip()
+                                cell_a.alignment = ALIGN_TITLE
+                            except: pass
+                    except: pass
+                    
+                for r in list(range(335, 340)) + list(range(342, 345)) + [348, 349, 350, 353, 354]:
+                    try: 
+                        c_a = dest_ws.cell(row=r, column=1)
+                        if not isinstance(c_a, MergedCell): c_a.alignment = ALIGN_LEFT
+                    except: pass
+
+                s8 = parsed_data["sec8"]
+                val148 = s8.get("B358", "").replace("해당없음", "자료없음")
+                lines148 = [l.strip() for l in val148.split('\n') if l.strip() and l.strip() != "자료없음"]
+                if not lines148: lines148 = ["자료없음"]
+                for i in range(100):
+                    r = 358 + i
+                    if i < len(lines148):
+                        safe_write_force(dest_ws, r, 2, lines148[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
+
+                val150 = re.sub(r"^규정[:\s]*", "", s8.get("B458", "").replace("해당없음", "자료없음")).strip()
+                lines150 = [l.strip() for l in val150.split('\n') if l.strip() and l.strip() != "자료없음"]
+                if not lines150: lines150 = ["자료없음"]
+                for i in range(100):
+                    r = 458 + i
+                    if i < len(lines150):
+                        safe_write_force(dest_ws, r, 2, lines150[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
+
+                s9 = parsed_data["sec9"]
+                safe_write_force(dest_ws, 569, 2, s9["B163"], center=False)
+                flash_num = re.findall(r'([<>]?\s*\d{2,3})' if option == "HP(K)" else r'(\d{2,3})', s9["B169"])
+                safe_write_force(dest_ws, 575, 2, f"{flash_num[0]}℃" if flash_num else "", center=False)
+                g_match = re.search(r'([\d\.]+)', s9["B176"].replace("(20℃)", "").replace("(물=1)", ""))
+                safe_write_force(dest_ws, 582, 2, f"{g_match.group(1)} ± 0.01" if g_match else "", center=False)
+                
+                if option == "HP(K)" and refractive_index_input: safe_write_force(dest_ws, 588, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
+                else:
+                    r_match = re.search(r'([\d\.]+)', s9["B182"].replace("(20℃)", ""))
+                    safe_write_force(dest_ws, 588, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
+
+                for sr, er, ck in [(601, 800, 'F'), (802, 1001, 'G'), (1003, 1202, 'H'), (1218, 1417, 'P'), (1419, 1618, 'Q'), (1624, 1823, 'T'), (1825, 2024, 'U'), (2026, 2225, 'V')]:
+                    fill_regulatory_section(dest_ws, sr, er, active_substances, kor_data_map, ck, mode=option)
+
+                s14 = parsed_data["sec14"]
+                un_raw = str(s14.get("UN", "")).strip(); un_val = re.sub(r"\D", "", un_raw)
+                if not un_val or "해당없음" in un_raw: un_val = "자료없음"
+                name_raw = str(s14.get("NAME", "")).strip(); name_val = re.sub(r"\([^)]*\)", "", name_raw).strip()
+                if not name_val or "해당없음" in name_raw: name_val = "자료없음"
+                class_val = str(s14.get("CLASS", "")).strip(); pg_val = str(s14.get("PG", "")).strip(); env_val = str(s14.get("ENV", "")).strip()
+                
+                for i, v in enumerate([un_val, name_val, class_val if class_val and "해당없음" not in class_val else "해당없음", pg_val if pg_val and "해당없음" not in pg_val else "해당없음", env_val if env_val and "해당없음" not in env_val else "해당없음"]):
+                    safe_write_force(dest_ws, 2240+i, 2, v, center=False)
+
+                s15 = parsed_data["sec15"]
+                if option == "HP(K)":
+                    clean_full = re.sub(r'[\s\-\,\.\:\(\)]+', '', s15.get("FULL_TEXT", ""))
+                    if ("4류" in clean_full and "3석유류" in clean_full and "2000" in clean_full):
+                        safe_write_force(dest_ws, 2249, 2, "4류 제3석유류(비수용성) 2,000L", center=False)
+                    else:
+                        safe_write_force(dest_ws, 2249, 2, "", center=False)
+                        dest_ws.cell(row=2249, column=2).fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
+                else: safe_write_force(dest_ws, 2249, 2, s15.get("DANGER", "").strip(), center=False)
+
+                safe_write_force(dest_ws, 2270, 2, datetime.now().strftime("%Y.%m.%d"), center=False)
+
+            # 이미지 삽입
+            if option in ["CFF(K)", "HP(K)", "CFF(E)", "HP(E)"]:
+                collected_pil_images = []
+                page = doc[0]
+                image_list = doc.get_page_images(0)
+                
+                for img_info in image_list:
+                    xref = img_info[0]
+                    try:
+                        base_image = doc.extract_image(xref)
+                        pil_img = PILImage.open(io.BytesIO(base_image["image"]))
+                        
+                        if option in ["HP(K)", "HP(E)"]:
+                            if is_blue_dominant(pil_img): continue
+                            w, h = pil_img.size
+                            if not is_square_shaped(w, h): continue
+
+                        if loaded_refs:
+                            matched_name = find_best_match_name(pil_img, loaded_refs, mode=option)
+                            if matched_name:
+                                clean_img = loaded_refs[matched_name]
+                                collected_pil_images.append((extract_number(matched_name), clean_img))
+                    except: continue
+
+                unique_images = {}
+                for key, img in collected_pil_images:
+                    if key not in unique_images: unique_images[key] = img
+                
+                final_sorted_imgs = [item[1] for item in sorted(unique_images.items(), key=lambda x: x[0])]
+
+                if final_sorted_imgs:
+                    unit_size = 67; icon_size = 60
+                    padding_top = 4; padding_left = (unit_size - icon_size) // 2
+                    total_width = unit_size * len(final_sorted_imgs)
+                    total_height = unit_size
+                    merged_img = PILImage.new('RGBA', (total_width, total_height), (255, 255, 255, 0))
+                    for idx, p_img in enumerate(final_sorted_imgs):
+                        p_img_resized = p_img.resize((icon_size, icon_size), PILImage.LANCZOS)
+                        merged_img.paste(p_img_resized, ((idx * unit_size) + padding_left, padding_top))
+                    
+                    img_byte_arr = io.BytesIO()
+                    merged_img.save(img_byte_arr, format='PNG')
+                    img_byte_arr.seek(0)
+                    dest_ws.add_image(XLImage(img_byte_arr), 'B23' if option in ["HP(K)", "CFF(K)"] else 'B22') 
+
+            dest_wb.external_links = []
+            output = io.BytesIO()
+            dest_wb.save(output)
+            output.seek(0)
+            
+            final_name = f"{current_prod_name} GHS MSDS({'E' if 'E' in option else 'K'}).xlsx"
+            if final_name in new_download_data: final_name = f"{current_prod_name}_{uploaded_file.name.split('.')[0]}.xlsx"
+            new_download_data[final_name] = output.getvalue()
+            new_files.append(final_name)
+            
+        except Exception as e:
+            return {"error": f"파일 처리 중 오류 발생 ({uploaded_file.name}): {e}"}
+
+    return {"files": new_files, "data": new_download_data}
+
+
+# ==============================================================================
+# [파트 2: 알러지 자료 통합 검토 내부 함수]
+# ==============================================================================
 TARGET_23_CAS = {
     "127-51-5", "122-40-7", "101-85-9", "105-13-5", "100-51-6",
     "120-51-4", "103-41-3", "118-58-1", "104-55-2", "104-54-1",
@@ -551,55 +1759,29 @@ def extract_data(file_raw, is_23=False, is_83=False):
             if c and v != 0: 
                 data_map[c] = {"n": ws.cell(row=r, column=2).value, "v": v}
                 
-    # 2. HP 통합 로직 (포괄적 키워드 탐색 적용)
+    # 2. HP 통합 로직 (키워드 기반 탐색)
     elif "HP" in name_upper:
         product_name = ws.cell(row=10, column=2).value or file_raw.name
         
-        # 열 인덱스를 찾을 변수
+        # 키워드로 열 탐색 (정규화)
         col_name, col_cas, col_val = None, None, None
-        
-        # [핵심 수정] 1행에만 헤더가 있는게 아니므로 셀 전체를 돌며 열 번호를 찾음
-        for r in range(1, min(ws.max_row + 1, 100)): # 상위 100행까지 스캔
-            for c in range(1, ws.max_column + 1):
-                # 띄어쓰기, 줄바꿈 등 모든 공백을 없애서 텍스트 매칭 신뢰도 100% 보장
-                cell_text = str(ws.cell(row=r, column=c).value or "").upper()
-                cell_text_clean = cell_text.replace('\n', '').replace('\r', '').replace('\xa0', '').replace(' ', '')
-                
-                if not cell_text_clean:
-                    continue
-                    
-                # 물질명 찾는 키워드 (Benzyl alcohol 무조건 포함된다고 하셨으므로)
-                if col_name is None and "BENZYLALCOHOL" in cell_text_clean:
-                    col_name = c
-                # CAS NO 찾는 키워드
-                if col_cas is None and "CAS" in cell_text_clean:
-                    col_cas = c
-                # 수치 찾는 키워드 (Total in Fragrance Oil(%) 공백 제거본)
-                if col_val is None and "TOTALINFRAGRANCEOIL(%)" in cell_text_clean:
-                    col_val = c
+        for c in range(1, ws.max_column + 1):
+            header = str(ws.cell(row=1, column=c).value or "").upper().replace('\n', ' ').replace('\r', ' ').replace('\xa0', ' ').strip()
+            if "BENZYL ALCOHOL" in header: col_name = c
+            elif "CAS" in header: col_cas = c
+            elif "TOTAL IN FRAGRANCE OIL(%)" in header: col_val = c
             
-            # 3개의 열을 모두 찾았다면 더 이상 불필요한 스캔 중단
-            if col_name and col_cas and col_val:
-                break
-                
-        # 만약 양식이 너무 달라서 아예 키워드를 못 찾았을 때를 대비한 기본값(Fallback)
-        if not col_name: col_name = 1
-        if not col_cas: col_cas = 2
-        if not col_val: col_val = 3
-
-        # 데이터 매핑 (한 행 안에서 찾은 열 번호들을 기준으로 동일 물질 정보 묶기)
-        for r in range(1, ws.max_row + 1):
-            name = ws.cell(row=r, column=col_name).value
-            cas = ws.cell(row=r, column=col_cas).value
-            val = ws.cell(row=r, column=col_val).value
+        # 데이터 추출: 키워드가 있으면 해당 열에서, 없으면 None 반환
+        for r in range(2, ws.max_row + 1):
+            name = ws.cell(row=r, column=col_name).value if col_name else None
+            cas = ws.cell(row=r, column=col_cas).value if col_cas else None
+            val = ws.cell(row=r, column=col_val).value if col_val else None
             
-            c_set = get_cas_set(cas)
-            v = clean_val(val)
-            
+            c_set, v = get_cas_set(cas), clean_val(val)
             if c_set and v != 0:
-                data_map[c_set] = {"n": str(name).strip() if name else "지정성분", "v": v}
+                data_map[c_set] = {"n": str(name) if name else "지정성분", "v": v}
 
-    # 3. 기타(is_83, is_23) 로직 (기존 유지)
+    # 3. 기타(is_83, is_23)
     elif is_83:
         product_name = ws.cell(row=10, column=2).value
         for r in range(1, ws.max_row + 1):
@@ -623,48 +1805,6 @@ def extract_data(file_raw, is_23=False, is_83=False):
     
     wb.close()
     return str(product_name).strip() if product_name else file_raw.name, data_map
-
-def process_others(customer_name, product_name, selected_files):
-    """
-    선택된 기타 양식(.docx) 템플릿들에 고객사, 제품명, 날짜를 입력하고
-    하나의 ZIP 파일로 압축하여 반환하는 함수입니다.
-    """
-    try:
-        zip_buffer = io.BytesIO()
-        template_dir = get_resource_path("OTHERS templates")
-        
-        # ZIP 파일 생성 준비
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for file_name in selected_files:
-                template_path = os.path.join(template_dir, file_name)
-                
-                # 워드 템플릿 열기
-                doc = DocxTemplate(template_path)
-                
-                # 템플릿에 들어갈 데이터 ({{CUSTOMER}}, {{PRODUCT}}, {{DATE}} 치환)
-                context = {
-                    "CUSTOMER": customer_name,
-                    "PRODUCT": product_name,
-                    "DATE": datetime.now().strftime("%d. %b. %Y").upper()
-                }
-                
-                # 데이터 렌더링
-                doc.render(context)
-                
-                # 변환된 문서를 메모리에 임시 저장
-                doc_io = io.BytesIO()
-                doc.save(doc_io)
-                doc_io.seek(0)
-                
-                # 제품명이 포함된 새로운 파일명으로 ZIP 안에 추가
-                output_name = f"{product_name} {file_name}"
-                zip_file.writestr(output_name, doc_io.getvalue())
-        
-        zip_buffer.seek(0)
-        return zip_buffer, f"{product_name}_OTHERS.zip"
-        
-    except Exception as e:
-        return None, f"기타 양식 처리 중 오류 발생: {e}"
 
 # ==============================================================================
 # [UI 레이아웃 구성: 파트 1 (통합 양식 변환기)]
@@ -780,7 +1920,6 @@ with col3_3:
 st.divider()
 
 # --- Section 4: MSDS ---
-# (코드 간결화를 위해 MSDS 부분은 누락하지 말라는 요청에 따라 생략하지 않고 그대로 이어집니다 - 사용자의 원래 코드에는 생략되어 있었음)
 col4_1, col4_2, col4_3 = st.columns(3)
 with col4_1:
     st.subheader("4. MSDS 양식 변환")
