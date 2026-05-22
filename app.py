@@ -612,7 +612,8 @@ def fill_fixed_range(ws, start_row, end_row, codes, code_map, mode="CFF(K)"):
                 ws.row_dimensions[current_row].hidden = False
                 safe_write_force(ws, current_row, 2, "")
                 safe_write_force(ws, current_row, 4, "자료없음", center=False)
-            elif "E" in mode and current_row in [24, 38, 50, 64, 70]:
+            # [수정됨] E 모드의 새로운 시작 범위에 맞게 조정
+            elif "E" in mode and current_row in [24, 45, 65, 85, 105]:
                 ws.row_dimensions[current_row].hidden = False
                 safe_write_force(ws, current_row, 2, "")
                 safe_write_force(ws, current_row, 4, "no data available", center=False)
@@ -626,8 +627,9 @@ def fill_composition_data(ws, comp_data, cas_to_name_map, mode="CFF(K)"):
         start_row = 133
         end_row = 332
     else:
-        start_row = 80
-        end_row = 122 if "E" in mode else 123
+        # [수정됨] 영문 모드 범위 (132~331)
+        start_row = 132
+        end_row = 331
         
     limit = end_row - start_row + 1
     for i in range(limit):
@@ -652,9 +654,9 @@ def fill_regulatory_section(ws, start_row, end_row, substances, data_map, col_ke
             substance_name = substances[i]
             safe_write_force(ws, current_row, 1, substance_name, center=False)
             cell_data = str(data_map.get(substance_name, {}).get(col_key, "")) if substance_name in data_map else ""
-            if cell_data == "nan": cell_data = ""
+            if cell_data == "nan" or "해당없음" in cell_data or "자료없음" in cell_data: cell_data = ""
             safe_write_force(ws, current_row, 2, cell_data, center=False)
-            ws.row_dimensions[current_row].hidden = False
+            ws.row_dimensions[current_row].hidden = (cell_data == "")
             _, h = format_and_calc_height_sec47(cell_data, mode=mode)
             ws.row_dimensions[current_row].height = max(h, 24.0)
         else:
@@ -826,7 +828,6 @@ def extract_section_smart(all_lines, start_kw, end_kw, mode="CFF(K)"):
             else: final_text += "\n" + curr_txt
     return final_text
 
-# [수정됨] 모드에 따라 CFF/HP 구분 처리, 자료없음/해당없음 모두 필터링하여 대괄호 제거 후 반환
 def parse_sec8_hp_content(text, mode="HP(K)"):
     if not text or "자료없음" in text: return "자료없음"
     valid_lines = []
@@ -878,56 +879,41 @@ def parse_pdf_final(doc, mode="CFF(K)"):
             if "5. FIREFIGHTING" in line['text'].upper(): sec5_lines = all_lines[i:]; break
 
         data = {
-            "B126": re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(all_lines, "Eye contact", "Skin contact", mode)).strip(),
-            "B127": re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(all_lines, "Skin contact", "Inhalation contact", mode)).strip(),
-            "B128": re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(all_lines, "Inhalation contact", "Ingestion contact", mode)).strip(),
-            "B129": re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(all_lines, "Ingestion contact", "Delayed and", mode)).strip(),
-            "B132": re.sub(r'(?i)^\s*\(unsuitable\)\s*extinguishing\s*media\s*', '', re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(sec5_lines, "Suitable", "Specific hazards", mode)).strip()).strip(),
-            "B134": re.sub(r'(?i)^\s*from\s*the\s*chemical\s*', '', re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(sec5_lines, "Specific hazards arising", "Special protective", mode)).strip()).strip(),
-            "B136": re.sub(r'(?i)^\s*for\s*firefighters\s*', '', re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(sec5_lines, "Special protective actions", "6. ACCIDENTAL", mode)).strip()).strip(),
-            "B140": re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(all_lines, "Personal precautions", "Environmental precautions", mode)).strip(),
-            "B142": re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(all_lines, "Environmental precautions", "Methods and materials", mode)).strip(),
-            "B144": re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(all_lines, "Methods and materials for containment", "7. HANDLING", mode)).strip(),
-            "B148": re.sub(r'(?i)^\s*handling\s*', '', re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(all_lines, "Precautions for safe", "Conditions for safe", mode)).strip()).strip(),
-            "B150": re.sub(r'(?i)^[\s,]*including\s*any\s*incompatibilities\s*', '', re.sub(r'(?m)^\s*-\s*', '', extract_section_smart(all_lines, "Conditions for safe storage", "8. EXPOSURE", mode)).strip()).strip()
+            "B125": extract_section_smart(all_lines, "4.1 General advice", "4.2 In case of eye contact", mode),
+            "B126": extract_section_smart(all_lines, "4.2 In case of eye contact", "4.3 In case of skin contact", mode),
+            "B127": extract_section_smart(all_lines, "4.3 In case of skin contact", "4.4 If inhaled", mode),
+            "B128": extract_section_smart(all_lines, "4.4 If inhaled", "4.5 If swallowed", mode),
+            "B129": extract_section_smart(all_lines, "4.5 If swallowed", "4.6 Special note for doctors", mode).replace("Medical personnel, and to ensure that take protection measures is recognized for its substance", ""),
+            "B132": extract_section_smart(all_lines, "5.1 Extinguishing media", "5.2 Special hazards", mode),
+            "B134": extract_section_smart(all_lines, "5.2 Special hazards", "5.3 Advice for firefighters", mode).replace("substance or mixture", ""),
+            "B136": extract_section_smart(all_lines, "5.3 Advice for firefighters", "6. Accidental", mode),
+            "B140": extract_section_smart(all_lines, "6.1 Personal precautions", "6.2 Environmental", mode).replace("equipment and emergency procedures", ""),
+            "B142": extract_section_smart(all_lines, "6.2 Environmental", "6.3 Methods", mode),
+            "B144": extract_section_smart(all_lines, "6.3 Methods", "7. Handling", mode).replace("and cleaning up", ""),
+            "B148": extract_section_smart(all_lines, "7.1 Precautions", "7.2 Conditions", mode),
+            "B150": extract_section_smart(all_lines, "7.2 Conditions", "8. Exposure", mode).replace("any incompatibilities", "")
         }
         result["sec4_to_7"] = data
 
-        s8_clean = re.sub(r'[○•\-\*]+', '', re.sub(r'(?i)^.*TLV\s*', '', extract_section_smart(all_lines, "ACGIH", "OSHA", mode)).strip()).replace("[", "").replace("]", "")
-        s8 = {}
-        if "Not applicable" in s8_clean or "Not available" in s8_clean or not s8_clean:
-            s8["B156"] = "no data available"; s8["B157"] = ""; s8["B158"] = ""
-        else:
-            lines = [l.strip() for l in s8_clean.split('\n') if l.strip()]
-            s8["B156"] = lines[0] if len(lines) > 0 else "no data available"
-            s8["B157"] = lines[1] if len(lines) > 1 else ""
-            s8["B158"] = "\n".join(lines[2:]) if len(lines) > 2 else ""
-        result["sec8"] = s8
+        result["sec8"] = {
+            "B154": extract_section_smart(all_lines, "Internal regulations", "ACGIH regulations", mode).replace("[", "").replace("]", ""),
+            "B156": extract_section_smart(all_lines, "ACGIH regulations", "Biological exposure", mode).replace("[", "").replace("]", "")
+        }
 
-        def find_val_in_sec9(lines, keyword):
-            for l in lines:
-                if keyword.lower() in l['text'].lower():
-                    parts = l['text'].split(keyword, 1)
-                    if len(parts) > 1:
-                        val = re.sub(r'^[:\s\-\.]+', '', parts[1]).strip()
-                        if val: return val
-            return ""
-
-        s9 = {}
-        c_val = find_val_in_sec9(sec9_lines, "Color"); s9["B170"] = c_val.capitalize() if c_val else ""
-        s9["B176"] = find_val_in_sec9(sec9_lines, "Flash point")
-        g_m = re.search(r'([\d\.]+)', find_val_in_sec9(sec9_lines, "Specific gravity"))
-        s9["B183"] = f"{g_m.group(1)} ± 0.010" if g_m else ""
-        s9["B189"] = find_val_in_sec9(sec9_lines, "Refractive index").replace("(20℃)", "").strip()
-        result["sec9"] = s9
+        result["sec9"] = {
+            "B170": extract_section_smart(sec9_lines, "Color", "Odor", mode),
+            "B176": extract_section_smart(sec9_lines, "Flash point", "Evaporation rate", mode),
+            "B183": extract_section_smart(sec9_lines, "Specific gravity", "Partition coefficient", mode).replace("(20/20℃)", "").replace("(Water=1)", "").strip(),
+            "B189": extract_section_smart(sec9_lines, "Refractive index", "10. Stability", mode).replace("(20℃)", "").strip()
+        }
 
         s14 = {}
-        s14["UN"] = re.sub(r'\D', '', extract_section_smart(all_lines, "UN No.", "Proper shipping name", mode))
+        s14["UN"] = re.sub(r'\D', '', extract_section_smart(all_lines, "14.1 UN number", "14.2 Proper", mode))
         s14["NAME"] = re.sub(r'\([^)]*\)', '', re.sub(r'(?i)shipping\s*name', '', re.sub(r'(?i)proper\s*shipping\s*name', '', extract_section_smart(all_lines, "14.2 Proper", "14.3 Transport", mode)))).replace("-", "").strip()
-        class_match = re.search(r'(\d)', extract_section_smart(all_lines, "C. Hazard Class", ["D. IMDG", "Packing group"], mode).replace("-", ""))
+        class_match = re.search(r'(\d)', extract_section_smart(all_lines, "14.3 Transport hazard class", "14.4 Packing group", mode).replace("-", ""))
         s14["CLASS"] = class_match.group(1) if class_match else ""
-        s14["PG"] = extract_section_smart(all_lines, "Packing group", "E. Marine pollutant", mode).replace("-", "").strip()
-        s14["ENV"] = extract_section_smart(all_lines, "E. Marine pollutant", "F. Special precautions", mode).replace("-", "").strip()
+        s14["PG"] = extract_section_smart(all_lines, "14.4 Packing group", "14.5 Environmental hazard", mode).replace("-", "").strip()
+        s14["ENV"] = extract_section_smart(all_lines, "14.5 Environmental hazard", "IATA", mode).replace("-", "").strip()
         result["sec14"] = s14
         result["sec15"] = {"DANGER": ""}
         return result
@@ -1152,7 +1138,6 @@ def parse_pdf_final(doc, mode="CFF(K)"):
         if "9. 물리화학" in line['text']: end_8 = i; break
     if start_8 != -1: sec8_lines = all_lines[start_8:(end_8 if end_8 != -1 else len(all_lines))]
     
-    # [수정됨] mode 인자를 전달하여 함수 내부에서 HP/CFF를 구분하여 파싱
     if mode == "HP(K)":
         result["sec8"] = {
             "B358": parse_sec8_hp_content(extract_section_smart(sec8_lines, "국내노출기준", "ACGIH노출기준", mode), mode=mode), 
@@ -1293,7 +1278,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
             return res
 
         if "신버전" in kor_form_version:
-            # [수정됨] 영문 작성 시 국문 신버전 범위도 함께 업데이트
             kor_override_data["h_codes"] = ext_codes(kor_ws, 25, 44)
             kor_override_data["p_prev"] = ext_codes(kor_ws, 46, 65)
             kor_override_data["p_resp"] = ext_codes(kor_ws, 66, 85)
@@ -1324,26 +1308,29 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                     if not isinstance(cell, MergedCell) and cell.column == 2 and cell.data_type == 'f': cell.value = ""
 
             if option == "HP(E)":
-                for addr in ['A50', 'A64', 'A70']: dest_ws[addr].alignment = ALIGN_LEFT
                 safe_write_force(dest_ws, 6, 2, current_prod_name, center=True)
                 safe_write_force(dest_ws, 9, 2, current_prod_name, center=False)
                 if parsed_data["hazard_cls"]:
                     safe_write_force(dest_ws, 19, 2, "\n".join(parsed_data["hazard_cls"]), center=False)
                     dest_ws.row_dimensions[19].height = len(parsed_data["hazard_cls"]) * 14.0
                 if parsed_data["signal_word"]: safe_write_force(dest_ws, 23, 2, parsed_data["signal_word"], center=False)
-                fill_fixed_range(dest_ws, 24, 36, parsed_data["h_codes"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 38, 49, parsed_data["p_prev"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 50, 63, parsed_data["p_resp"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 64, 69, parsed_data["p_stor"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 70, 72, parsed_data["p_disp"], code_map, mode=option)
+                
+                # [수정됨] E모드 H/P 코드 범위
+                fill_fixed_range(dest_ws, 24, 43, parsed_data["h_codes"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 45, 64, parsed_data["p_prev"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 65, 84, parsed_data["p_resp"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 85, 104, parsed_data["p_stor"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 105, 124, parsed_data["p_disp"], code_map, mode=option)
                 fill_composition_data(dest_ws, parsed_data["composition_data"], cas_name_map, mode=option)
+                
                 active_substances = [cas_name_map[c[0].replace(" ", "").strip()] for c in parsed_data["composition_data"] if c[0].replace(" ", "").strip() in cas_name_map and cas_name_map[c[0].replace(" ", "").strip()]]
                 
+                # [수정됨] E모드 Sec 4~7 특정 셀 매핑
                 sd = parsed_data["sec4_to_7"]
                 cell_map_e = {
-                    "B126": sd.get("B126",""), "B127": sd.get("B127",""), "B128": sd.get("B128",""), "B129": sd.get("B129",""), "B132": sd.get("B132",""),
-                    "B134": sd.get("B134",""), "B136": sd.get("B136",""), "B140": sd.get("B140",""), "B142": sd.get("B142",""), "B144": sd.get("B144",""),
-                    "B148": sd.get("B148",""), "B150": sd.get("B150",""), "B170": parsed_data["sec9"].get("B170",""), "B176": parsed_data["sec9"].get("B176",""), "B183": parsed_data["sec9"].get("B183","")
+                    "B334": sd.get("B125",""), "B335": sd.get("B126",""), "B336": sd.get("B127",""), "B337": sd.get("B128",""), "B338": sd.get("B129",""),
+                    "B341": sd.get("B132",""), "B343": sd.get("B134",""), "B345": sd.get("B136",""), "B349": sd.get("B140",""), "B351": sd.get("B142",""),
+                    "B353": sd.get("B144",""), "B357": sd.get("B148",""), "B359": sd.get("B150","")
                 }
                 for addr, val in cell_map_e.items():
                     if val:
@@ -1351,83 +1338,172 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                         r_idx = int(re.search(r'\d+', addr).group())
                         safe_write_force(dest_ws, r_idx, 2, formatted, center=False)
                         dest_ws.row_dimensions[r_idx].height = h
-                for r in [170, 176, 183, 189]: dest_ws.row_dimensions[r].height = 18.4
 
+                # [수정됨] E모드 Sec 8 (Internal & ACGIH) 1물질 1행 숨김처리 로직
                 s8 = parsed_data["sec8"]
-                for i, k in enumerate(["B156", "B157", "B158"]):
-                    if k in s8:
-                        safe_write_force(dest_ws, 156+i, 2, s8[k], center=False)
-                        if i > 0: dest_ws.row_dimensions[156+i].hidden = not bool(s8[k])
+                val_internal = s8.get("B154", "").replace("Not applicable", "no data available")
+                lines_internal = [l.strip() for l in val_internal.split('\n') if l.strip() and l.strip() != "no data available"]
+                if not lines_internal: lines_internal = ["no data available"]
+                for i in range(200):
+                    r = 363 + i
+                    if i < len(lines_internal):
+                        safe_write_force(dest_ws, r, 2, lines_internal[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
 
-                for sr, er, ck in [(202, 240, 'F'), (242, 279, 'G'), (281, 315, 'H'), (324, 358, 'P'), (360, 395, 'Q'), (401, 437, 'T'), (439, 478, 'U'), (480, 519, 'V')]:
-                    fill_regulatory_section(dest_ws, sr, er, active_substances, eng_data_map, ck, mode=option)
+                val_acgih = s8.get("B156", "").replace("Not applicable", "no data available")
+                lines_acgih = [l.strip() for l in val_acgih.split('\n') if l.strip() and l.strip() != "no data available"]
+                if not lines_acgih: lines_acgih = ["no data available"]
+                for i in range(200):
+                    r = 563 + i
+                    if i < len(lines_acgih):
+                        safe_write_force(dest_ws, r, 2, lines_acgih[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
+
+                # [수정됨] E모드 Sec 9 매핑
+                s9 = parsed_data["sec9"]
+                safe_write_force(dest_ws, 774, 2, s9.get("B170","").capitalize(), center=False)
+                flash_num = re.findall(r'(\d{2,3})', s9.get("B176",""))
+                safe_write_force(dest_ws, 780, 2, f"{flash_num[0]}℃" if flash_num else "", center=False)
                 
-                if refractive_index_input: safe_write_force(dest_ws, 189, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
+                g_match = re.search(r'([\d\.]+)', s9.get("B183","").replace("(20/20℃)", "").replace("(Water=1)", ""))
+                safe_write_force(dest_ws, 787, 2, f"{g_match.group(1)} ± 0.01" if g_match else "", center=False)
+                
+                if refractive_index_input: safe_write_force(dest_ws, 793, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
+                else:
+                    r_match = re.search(r'([\d\.]+)', s9.get("B189","").replace("(20℃)", ""))
+                    safe_write_force(dest_ws, 793, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
 
+                # [수정됨] E모드 Toxicity 및 Ecological 정보 매핑
+                for sr, er, ck in [(806, 1005, 'F'), (1007, 1206, 'G'), (1208, 1407, 'H'), (1416, 1615, 'P'), (1617, 1816, 'Q'), (1822, 2021, 'T'), (2023, 2222, 'U'), (2224, 2423, 'V')]:
+                    fill_regulatory_section(dest_ws, sr, er, active_substances, eng_data_map, ck, mode=option)
+
+                # [수정됨] E모드 표 사이 간격(Gap) 숨김처리
+                for r in [1006, 1207] + list(range(1408, 1416)) + [1616] + list(range(1817, 1822)) + [2022, 2223]: 
+                    dest_ws.row_dimensions[r].hidden = True
+
+                # [수정됨] E모드 Sec 14 매핑
                 s14 = parsed_data["sec14"]
-                for i, key in enumerate(["UN", "NAME", "CLASS", "PG", "ENV"]):
-                    val = str(s14.get(key, "")).strip()
-                    if not val or val.lower() == "not applicable": val = "no data available" if key in ["UN", "NAME"] else "Not applicable"
-                    safe_write_force(dest_ws, 531+i, 2, val, center=False)
-                safe_write_force(dest_ws, 544, 1, f"16.2 Date of Issue : {datetime.now().strftime('%d. %b. %Y').upper()}", center=False)
+                un_raw = str(s14.get("UN", "")).strip()
+                un_val = re.sub(r"\D", "", un_raw)
+                if not un_val or "no data" in un_raw.lower() or "not applicable" in un_raw.lower(): un_val = "no data available"
+                
+                name_raw = str(s14.get("NAME", "")).strip()
+                name_val = re.sub(r"\([^)]*\)", "", name_raw).strip()
+                if not name_val or "no data" in name_raw.lower() or "not applicable" in name_raw.lower(): name_val = "no data available"
+                
+                class_val = str(s14.get("CLASS", "")).strip()
+                pg_val = str(s14.get("PG", "")).strip()
+                env_val = str(s14.get("ENV", "")).strip()
+                
+                for i, v in enumerate([un_val, name_val, class_val if class_val and "not applicable" not in class_val.lower() else "Not applicable", pg_val if pg_val and "not applicable" not in pg_val.lower() else "Not applicable", env_val if env_val and "not applicable" not in env_val.lower() else "Not applicable"]):
+                    safe_write_force(dest_ws, 2435+i, 2, v, center=False)
+
+                safe_write_force(dest_ws, 2448, 1, f"16.2 Date of Issue : {datetime.now().strftime('%d. %b. %Y').upper()}", center=False)
 
             elif option == "CFF(E)":
-                for addr in ['A50', 'A64', 'A70']: dest_ws[addr].alignment = ALIGN_LEFT
-                safe_write_force(dest_ws, 6, 2, current_prod_name, center=True); safe_write_force(dest_ws, 9, 2, current_prod_name, center=False)
+                safe_write_force(dest_ws, 6, 2, current_prod_name, center=True)
+                safe_write_force(dest_ws, 9, 2, current_prod_name, center=False)
                 if parsed_data["hazard_cls"]:
                     safe_write_force(dest_ws, 19, 2, "\n".join(parsed_data["hazard_cls"]), center=False)
                     dest_ws.row_dimensions[19].height = len(parsed_data["hazard_cls"]) * 14.0
                 if parsed_data["signal_word"]: safe_write_force(dest_ws, 23, 2, parsed_data["signal_word"], center=False)
-                fill_fixed_range(dest_ws, 24, 36, parsed_data["h_codes"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 38, 49, parsed_data["p_prev"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 50, 63, parsed_data["p_resp"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 64, 69, parsed_data["p_stor"], code_map, mode=option)
-                fill_fixed_range(dest_ws, 70, 72, parsed_data["p_disp"], code_map, mode=option)
+                
+                # [수정됨] E모드 H/P 코드 범위
+                fill_fixed_range(dest_ws, 24, 43, parsed_data["h_codes"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 45, 64, parsed_data["p_prev"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 65, 84, parsed_data["p_resp"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 85, 104, parsed_data["p_stor"], code_map, mode=option)
+                fill_fixed_range(dest_ws, 105, 124, parsed_data["p_disp"], code_map, mode=option)
                 fill_composition_data(dest_ws, parsed_data["composition_data"], cas_name_map, mode=option)
+                
                 active_substances = [cas_name_map[c[0].replace(" ", "").strip()] for c in parsed_data["composition_data"] if c[0].replace(" ", "").strip() in cas_name_map and cas_name_map[c[0].replace(" ", "").strip()]]
                 
+                # [수정됨] E모드 Sec 4~7 특정 셀 매핑
                 sd = parsed_data["sec4_to_7"]
                 cell_map_e = {
-                    "B125": sd.get("B125",""), "B126": sd.get("B126",""), "B127": sd.get("B127",""), "B128": sd.get("B128",""), "B129": sd.get("B129",""),
-                    "B132": sd.get("B132",""), "B134": sd.get("B134",""), "B136": sd.get("B136",""), "B140": sd.get("B140",""), "B142": sd.get("B142",""),
-                    "B144": sd.get("B144",""), "B148": sd.get("B148",""), "B150": sd.get("B150",""),
-                    "B170": parsed_data["sec9"].get("B170","").capitalize(), "B176": parsed_data["sec9"].get("B176",""), "B183": parsed_data["sec9"].get("B183",""), "B189": parsed_data["sec9"].get("B189","")
+                    "B334": sd.get("B125",""), "B335": sd.get("B126",""), "B336": sd.get("B127",""), "B337": sd.get("B128",""), "B338": sd.get("B129",""),
+                    "B341": sd.get("B132",""), "B343": sd.get("B134",""), "B345": sd.get("B136",""), "B349": sd.get("B140",""), "B351": sd.get("B142",""),
+                    "B353": sd.get("B144",""), "B357": sd.get("B148",""), "B359": sd.get("B150","")
                 }
                 for addr, val in cell_map_e.items():
                     if val:
-                        if addr in ["B183", "B189"] and "±" not in val:
-                            num = re.search(r'([\d\.]+)', val)
-                            if num: val = f"{num.group(1)} ± {'0.01' if addr == 'B183' else '0.005'}"
                         formatted, h = format_and_calc_height_sec47(val, mode=option)
                         r_idx = int(re.search(r'\d+', addr).group())
                         safe_write_force(dest_ws, r_idx, 2, formatted, center=False)
                         dest_ws.row_dimensions[r_idx].height = h
 
+                # [수정됨] E모드 Sec 8 (Internal & ACGIH) 1물질 1행 숨김처리 로직
                 s8 = parsed_data["sec8"]
-                if s8["B154"]:
-                    lines = s8["B154"].split('\n')
-                    safe_write_force(dest_ws, 154, 2, lines[0].lower() if "no data" in lines[0].lower() else lines[0], center=False)
-                    if len(lines) > 1:
-                        safe_write_force(dest_ws, 155, 2, "\n".join(lines[1:]), center=False)
-                        dest_ws.row_dimensions[155].hidden = False
-                if s8["B156"]:
-                    lines = s8["B156"].split('\n')
-                    safe_write_force(dest_ws, 156, 2, lines[0].lower() if "no data" in lines[0].lower() else lines[0], center=False)
-                    if len(lines) > 1:
-                        safe_write_force(dest_ws, 157, 2, "\n".join(lines[1:]), center=False)
-                        dest_ws.row_dimensions[157].hidden = False
+                val_internal = s8.get("B154", "").replace("Not applicable", "no data available")
+                lines_internal = [l.strip() for l in val_internal.split('\n') if l.strip() and l.strip() != "no data available"]
+                if not lines_internal: lines_internal = ["no data available"]
+                for i in range(200):
+                    r = 363 + i
+                    if i < len(lines_internal):
+                        safe_write_force(dest_ws, r, 2, lines_internal[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
 
-                for sr, er, ck in [(202, 240, 'F'), (242, 279, 'G'), (281, 315, 'H'), (324, 358, 'P'), (360, 395, 'Q'), (401, 437, 'T'), (439, 478, 'U'), (480, 519, 'V')]:
-                    fill_regulatory_section(dest_ws, sr, er, active_substances, eng_data_map, ck, mode=option)
+                val_acgih = s8.get("B156", "").replace("Not applicable", "no data available")
+                lines_acgih = [l.strip() for l in val_acgih.split('\n') if l.strip() and l.strip() != "no data available"]
+                if not lines_acgih: lines_acgih = ["no data available"]
+                for i in range(200):
+                    r = 563 + i
+                    if i < len(lines_acgih):
+                        safe_write_force(dest_ws, r, 2, lines_acgih[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
+
+                # [수정됨] E모드 Sec 9 매핑
+                s9 = parsed_data["sec9"]
+                safe_write_force(dest_ws, 774, 2, s9.get("B170","").capitalize(), center=False)
+                flash_num = re.findall(r'(\d{2,3})', s9.get("B176",""))
+                safe_write_force(dest_ws, 780, 2, f"{flash_num[0]}℃" if flash_num else "", center=False)
                 
-                if refractive_index_input: safe_write_force(dest_ws, 189, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
+                g_match = re.search(r'([\d\.]+)', s9.get("B183","").replace("(20/20℃)", "").replace("(Water=1)", ""))
+                safe_write_force(dest_ws, 787, 2, f"{g_match.group(1)} ± 0.01" if g_match else "", center=False)
+                
+                if refractive_index_input: safe_write_force(dest_ws, 793, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
+                else:
+                    r_match = re.search(r'([\d\.]+)', s9.get("B189","").replace("(20℃)", ""))
+                    safe_write_force(dest_ws, 793, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
 
+                # [수정됨] E모드 Toxicity 및 Ecological 정보 매핑
+                for sr, er, ck in [(806, 1005, 'F'), (1007, 1206, 'G'), (1208, 1407, 'H'), (1416, 1615, 'P'), (1617, 1816, 'Q'), (1822, 2021, 'T'), (2023, 2222, 'U'), (2224, 2423, 'V')]:
+                    fill_regulatory_section(dest_ws, sr, er, active_substances, eng_data_map, ck, mode=option)
+
+                # [수정됨] E모드 표 사이 간격(Gap) 숨김처리
+                for r in [1006, 1207] + list(range(1408, 1416)) + [1616] + list(range(1817, 1822)) + [2022, 2223]: 
+                    dest_ws.row_dimensions[r].hidden = True
+
+                # [수정됨] E모드 Sec 14 매핑
                 s14 = parsed_data["sec14"]
-                for i, key in enumerate(["UN", "NAME", "CLASS", "PG", "ENV"]):
-                    val = str(s14.get(key, "")).strip()
-                    if not val or val.lower() == "not applicable": val = "no data available" if key in ["UN", "NAME"] else "Not applicable"
-                    safe_write_force(dest_ws, 531+i, 2, val, center=False)
-                safe_write_force(dest_ws, 544, 1, f"16.2 Date of Issue : {datetime.now().strftime('%d. %b. %Y').upper()}", center=False)
+                un_raw = str(s14.get("UN", "")).strip()
+                un_val = re.sub(r"\D", "", un_raw)
+                if not un_val or "no data" in un_raw.lower() or "not applicable" in un_raw.lower(): un_val = "no data available"
+                
+                name_raw = str(s14.get("NAME", "")).strip()
+                name_val = re.sub(r"\([^)]*\)", "", name_raw).strip()
+                if not name_val or "no data" in name_raw.lower() or "not applicable" in name_raw.lower(): name_val = "no data available"
+                
+                class_val = str(s14.get("CLASS", "")).strip()
+                pg_val = str(s14.get("PG", "")).strip()
+                env_val = str(s14.get("ENV", "")).strip()
+                
+                for i, v in enumerate([un_val, name_val, class_val if class_val and "not applicable" not in class_val.lower() else "Not applicable", pg_val if pg_val and "not applicable" not in pg_val.lower() else "Not applicable", env_val if env_val and "not applicable" not in env_val.lower() else "Not applicable"]):
+                    safe_write_force(dest_ws, 2435+i, 2, v, center=False)
+
+                safe_write_force(dest_ws, 2448, 1, f"16.2 Date of Issue : {datetime.now().strftime('%d. %b. %Y').upper()}", center=False)
 
             else: # CFF(K) / HP(K)
                 safe_write_force(dest_ws, 7, 2, current_prod_name, center=True); safe_write_force(dest_ws, 10, 2, current_prod_name, center=False)
@@ -1441,7 +1517,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 safe_write_force(dest_ws, 24, 2, parsed_data["signal_word"] if parsed_data["signal_word"] else "", center=False) 
                 
                 if option == "HP(K)":
-                    # [수정됨] 행 범위 업데이트
                     for r, v in [(46, "예방"), (66, "대응"), (86, "저장"), (106, "폐기")]: safe_write_force(dest_ws, r, 1, v, center=False)
 
                 fill_fixed_range(dest_ws, 25, 44, parsed_data["h_codes"], code_map, mode=option)
@@ -1459,7 +1534,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                         col_idx = openpyxl.utils.column_index_from_string(re.match(r"([A-Z]+)", cell_addr).group(1))
                         row_num = int(re.search(r"(\d+)", cell_addr).group(1))
                         
-                        # [수정됨] 새 범위에 맞게 응급/화재/누출/취급저장 데이터 행 재배치 (+210)
                         if option in ["HP(K)", "CFF(K)"]:
                             row_num += 210
                             
@@ -1480,7 +1554,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                         if not isinstance(c_a, MergedCell): c_a.alignment = ALIGN_LEFT
                     except: pass
 
-                # [수정됨] 국내규정 (358:457) 빈 행 1개씩 나누어 넣고 없으면 숨김
                 s8 = parsed_data["sec8"]
                 val148 = s8.get("B358", "").replace("해당없음", "자료없음")
                 lines148 = [l.strip() for l in val148.split('\n') if l.strip() and l.strip() != "자료없음"]
@@ -1494,7 +1567,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                         safe_write_force(dest_ws, r, 2, "", center=False)
                         dest_ws.row_dimensions[r].hidden = True
 
-                # [수정됨] ACGIH 규정 (458:557) 빈 행 1개씩 나누어 넣고 없으면 숨김
                 val150 = re.sub(r"^규정[:\s]*", "", s8.get("B458", "").replace("해당없음", "자료없음")).strip()
                 lines150 = [l.strip() for l in val150.split('\n') if l.strip() and l.strip() != "자료없음"]
                 if not lines150: lines150 = ["자료없음"]
@@ -1522,7 +1594,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 for sr, er, ck in [(601, 800, 'F'), (802, 1001, 'G'), (1003, 1202, 'H'), (1218, 1417, 'P'), (1419, 1618, 'Q'), (1624, 1823, 'T'), (1825, 2024, 'U'), (2026, 2225, 'V')]:
                     fill_regulatory_section(dest_ws, sr, er, active_substances, kor_data_map, ck, mode=option)
 
-                # [수정됨] 표 사이의 빈 행 숨김 (1002, 1418, 1619~1623, 2025행)
                 for r in [1002, 1418] + list(range(1619, 1624)) + [2025]: dest_ws.row_dimensions[r].hidden = True
 
                 s14 = parsed_data["sec14"]
@@ -1532,7 +1603,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 if not name_val or "해당없음" in name_raw: name_val = "자료없음"
                 class_val = str(s14.get("CLASS", "")).strip(); pg_val = str(s14.get("PG", "")).strip(); env_val = str(s14.get("ENV", "")).strip()
                 
-                # [수정됨] B2240~B2244 순서에 맞게 UN번호, 적정선적명, 위험성등급, 용기등급, 해양오염물질 매핑
                 for i, v in enumerate([un_val, name_val, class_val if class_val and "해당없음" not in class_val else "해당없음", pg_val if pg_val and "해당없음" not in pg_val else "해당없음", env_val if env_val and "해당없음" not in env_val else "해당없음"]):
                     safe_write_force(dest_ws, 2240+i, 2, v, center=False)
 
@@ -1607,35 +1677,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
             return {"error": f"파일 처리 중 오류 발생 ({uploaded_file.name}): {e}"}
 
     return {"files": new_files, "data": new_download_data}
-
-# ==============================================================================
-# [5번: OTHERS 변환기 로직]
-# ==============================================================================
-def process_others(customer_name, product_name, selected_files):
-    kst = timezone(timedelta(hours=9))
-    current_time = datetime.now(kst)
-    english_months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-    current_date = f"{english_months[current_time.month - 1]} {current_time.strftime('%d, %Y')}"
-    
-    template_dir = get_resource_path("OTHERS templates")
-    if not os.path.exists(template_dir): return None, f"'{template_dir}' 폴더를 찾을 수 없습니다."
-    
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for filename in os.listdir(template_dir):
-            if filename in selected_files and filename.endswith(".docx") and not filename.startswith("~"):
-                file_path = os.path.join(template_dir, filename)
-                try:
-                    doc = DocxTemplate(file_path)
-                    doc.render({'DATE': current_date, 'CUSTOMER': customer_name, 'PRODUCT': product_name})
-                    doc_io = io.BytesIO()
-                    doc.save(doc_io)
-                    doc_io.seek(0)
-                    zip_file.writestr(filename.replace("STH", product_name), doc_io.read())
-                except Exception:
-                    pass
-    zip_buffer.seek(0)
-    return zip_buffer, f"{customer_name}_{product_name}.zip"
 
 
 # ==============================================================================
