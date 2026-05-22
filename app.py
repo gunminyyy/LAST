@@ -608,7 +608,6 @@ def fill_fixed_range(ws, start_row, end_row, codes, code_map, mode="CFF(K)"):
             safe_write_force(ws, current_row, 2, code, center=False)
             safe_write_force(ws, current_row, 4, desc, center=False)
         else:
-            # [수정됨] K 모드에서 자료없음이 찍히는 시작 행(Hazard, Prev, Resp, Stor, Disp)을 새 범위에 맞게 조정
             if "K" in mode and current_row in [25, 46, 66, 86, 106]:
                 ws.row_dimensions[current_row].hidden = False
                 safe_write_force(ws, current_row, 2, "")
@@ -623,7 +622,6 @@ def fill_fixed_range(ws, start_row, end_row, codes, code_map, mode="CFF(K)"):
                 safe_write_force(ws, current_row, 4, "")
 
 def fill_composition_data(ws, comp_data, cas_to_name_map, mode="CFF(K)"):
-    # [수정됨] K 모드일 경우 구성성분 범위를 133 ~ 332로 확장
     if mode in ["CFF(K)", "HP(K)"]:
         start_row = 133
         end_row = 332
@@ -828,19 +826,24 @@ def extract_section_smart(all_lines, start_kw, end_kw, mode="CFF(K)"):
             else: final_text += "\n" + curr_txt
     return final_text
 
-def parse_sec8_hp_content(text):
-    if not text: return "자료없음"
+# [수정됨] 모드에 따라 CFF/HP 구분 처리, 자료없음/해당없음 모두 필터링하여 대괄호 제거 후 반환
+def parse_sec8_hp_content(text, mode="HP(K)"):
+    if not text or "자료없음" in text: return "자료없음"
     valid_lines = []
-    for chunk in text.split("-"):
+    
+    lines_to_parse = text.split("-") if "HP" in mode else text.split("\n")
+    
+    for chunk in lines_to_parse:
         clean_chunk = chunk.strip()
         if not clean_chunk: continue
         if ":" in clean_chunk:
             parts = clean_chunk.split(":", 1)
             name_part, value_part = parts[0].strip(), parts[1].strip()
-            if "해당없음" in value_part: continue 
+            if any(x in value_part for x in ["해당없음", "자료없음"]): continue 
             valid_lines.append(f"{name_part.replace('[', '').replace(']', '').strip()} : {value_part.replace('[', '').replace(']', '').strip()}")
-        elif "해당없음" not in clean_chunk:
+        elif not any(x in clean_chunk for x in ["해당없음", "자료없음"]):
             valid_lines.append(clean_chunk.replace("[", "").replace("]", "").strip())
+            
     return "\n".join(valid_lines) if valid_lines else "자료없음"
 
 def parse_pdf_final(doc, mode="CFF(K)"):
@@ -1085,7 +1088,6 @@ def parse_pdf_final(doc, mode="CFF(K)"):
                 cas_found = regex_cas_strict.findall(txt)
                 if cas_found:
                     c_val = cas_found[0].replace(" ", "")
-                    # [수정/이식] 식별번호 필터링 적용 (2005-3-3059 등)
                     txt_no_cas = re.sub(r'\b(?:(?:19|20)\d{2}-\d{1,2}-\d+|KE-\d+)\b', ' ', txt.replace(cas_found[0], " " * len(cas_found[0])), flags=re.IGNORECASE)
                     m_range = re.search(r'\b(\d+(?:\.\d+)?)\s*(?:-|~)\s*(\d+(?:\.\d+)?)\b', txt_no_cas)
                     if m_range:
@@ -1106,7 +1108,6 @@ def parse_pdf_final(doc, mode="CFF(K)"):
                     cas_found_loose = regex_cas_ec_kill.findall(txt)
                     if cas_found_loose and re.match(r'\d{2,7}-\d{2}-\d', cas_found_loose[0].replace(" ", "")): c_val = cas_found_loose[0].replace(" ", "")
                 
-                # [수정/이식] 식별번호 필터링 적용
                 txt_clean = re.sub(r'\b(?:(?:19|20)\d{2}-\d{1,2}-\d+|KE-\d+)\b', ' ', regex_cas_ec_kill.sub(" ", txt), flags=re.IGNORECASE)
                 m_tilde = regex_tilde_range.search(txt_clean)
                 if m_tilde:
@@ -1151,8 +1152,12 @@ def parse_pdf_final(doc, mode="CFF(K)"):
         if "9. 물리화학" in line['text']: end_8 = i; break
     if start_8 != -1: sec8_lines = all_lines[start_8:(end_8 if end_8 != -1 else len(all_lines))]
     
+    # [수정됨] mode 인자를 전달하여 함수 내부에서 HP/CFF를 구분하여 파싱
     if mode == "HP(K)":
-        result["sec8"] = {"B148": parse_sec8_hp_content(extract_section_smart(sec8_lines, "국내노출기준", "ACGIH노출기준", mode)), "B150": parse_sec8_hp_content(extract_section_smart(sec8_lines, "ACGIH노출기준", "생물학적", mode))}
+        result["sec8"] = {
+            "B358": parse_sec8_hp_content(extract_section_smart(sec8_lines, "국내노출기준", "ACGIH노출기준", mode), mode=mode), 
+            "B458": parse_sec8_hp_content(extract_section_smart(sec8_lines, "ACGIH노출기준", "생물학적", mode), mode=mode)
+        }
         result["sec9"] = {
             "B163": extract_section_smart(sec9_lines, "- 색", "나. 냄새", mode),
             "B169": extract_section_smart(sec9_lines, "인화점", "아. 증발속도", mode),
@@ -1160,7 +1165,10 @@ def parse_pdf_final(doc, mode="CFF(K)"):
             "B182": extract_section_smart(sec9_lines, "굴절률", ["10. 안정성", "10. 화학적"], mode)
         }
     else:
-        result["sec8"] = {"B148": extract_section_smart(sec8_lines, "국내규정", "ACGIH", mode), "B150": extract_section_smart(sec8_lines, "ACGIH", "생물학적", mode)}
+        result["sec8"] = {
+            "B358": parse_sec8_hp_content(extract_section_smart(sec8_lines, "국내규정", "ACGIH", mode), mode=mode), 
+            "B458": parse_sec8_hp_content(extract_section_smart(sec8_lines, "ACGIH", "생물학적", mode), mode=mode)
+        }
         result["sec9"] = {
             "B163": extract_section_smart(sec9_lines, "색상", "나. 냄새", mode),
             "B169": extract_section_smart(sec9_lines, "인화점", "아. 증발속도", mode),
@@ -1285,6 +1293,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
             return res
 
         if "신버전" in kor_form_version:
+            # [수정됨] 영문 작성 시 국문 신버전 범위도 함께 업데이트
             kor_override_data["h_codes"] = ext_codes(kor_ws, 25, 44)
             kor_override_data["p_prev"] = ext_codes(kor_ws, 46, 65)
             kor_override_data["p_resp"] = ext_codes(kor_ws, 66, 85)
@@ -1430,7 +1439,9 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                     if valid_lines_count > 0: dest_ws.row_dimensions[20].height = valid_lines_count * 14.0
 
                 safe_write_force(dest_ws, 24, 2, parsed_data["signal_word"] if parsed_data["signal_word"] else "", center=False) 
+                
                 if option == "HP(K)":
+                    # [수정됨] 행 범위 업데이트
                     for r, v in [(46, "예방"), (66, "대응"), (86, "저장"), (106, "폐기")]: safe_write_force(dest_ws, r, 1, v, center=False)
 
                 fill_fixed_range(dest_ws, 25, 44, parsed_data["h_codes"], code_map, mode=option)
@@ -1447,7 +1458,11 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                     try:
                         col_idx = openpyxl.utils.column_index_from_string(re.match(r"([A-Z]+)", cell_addr).group(1))
                         row_num = int(re.search(r"(\d+)", cell_addr).group(1))
-                        row_num += 210
+                        
+                        # [수정됨] 새 범위에 맞게 응급/화재/누출/취급저장 데이터 행 재배치 (+210)
+                        if option in ["HP(K)", "CFF(K)"]:
+                            row_num += 210
+                            
                         safe_write_force(dest_ws, row_num, col_idx, "")
                         if formatted_txt:
                             safe_write_force(dest_ws, row_num, col_idx, formatted_txt, center=False)
@@ -1465,16 +1480,32 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                         if not isinstance(c_a, MergedCell): c_a.alignment = ALIGN_LEFT
                     except: pass
 
+                # [수정됨] 국내규정 (358:457) 빈 행 1개씩 나누어 넣고 없으면 숨김
                 s8 = parsed_data["sec8"]
-                val148 = s8["B148"].replace("해당없음", "자료없음")
-                lines148 = [l.strip() for l in val148.split('\n') if l.strip()]
-                safe_write_force(dest_ws, 358, 2, ""); safe_write_force(dest_ws, 359, 2, ""); dest_ws.row_dimensions[359].hidden = True
-                if lines148:
-                    safe_write_force(dest_ws, 358, 2, lines148[0], center=False)
-                    if len(lines148) > 1:
-                        safe_write_force(dest_ws, 359, 2, "\n".join(lines148[1:]), center=False)
-                        dest_ws.row_dimensions[359].hidden = False
-                safe_write_force(dest_ws, 458, 2, re.sub(r"^규정[:\s]*", "", s8["B150"].replace("해당없음", "자료없음")).strip(), center=False)
+                val148 = s8.get("B358", "").replace("해당없음", "자료없음")
+                lines148 = [l.strip() for l in val148.split('\n') if l.strip() and l.strip() != "자료없음"]
+                if not lines148: lines148 = ["자료없음"]
+                for i in range(100):
+                    r = 358 + i
+                    if i < len(lines148):
+                        safe_write_force(dest_ws, r, 2, lines148[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
+
+                # [수정됨] ACGIH 규정 (458:557) 빈 행 1개씩 나누어 넣고 없으면 숨김
+                val150 = re.sub(r"^규정[:\s]*", "", s8.get("B458", "").replace("해당없음", "자료없음")).strip()
+                lines150 = [l.strip() for l in val150.split('\n') if l.strip() and l.strip() != "자료없음"]
+                if not lines150: lines150 = ["자료없음"]
+                for i in range(100):
+                    r = 458 + i
+                    if i < len(lines150):
+                        safe_write_force(dest_ws, r, 2, lines150[i], center=False)
+                        dest_ws.row_dimensions[r].hidden = False
+                    else:
+                        safe_write_force(dest_ws, r, 2, "", center=False)
+                        dest_ws.row_dimensions[r].hidden = True
 
                 s9 = parsed_data["sec9"]
                 safe_write_force(dest_ws, 569, 2, s9["B163"], center=False)
@@ -1491,6 +1522,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 for sr, er, ck in [(601, 800, 'F'), (802, 1001, 'G'), (1003, 1202, 'H'), (1218, 1417, 'P'), (1419, 1618, 'Q'), (1624, 1823, 'T'), (1825, 2024, 'U'), (2026, 2225, 'V')]:
                     fill_regulatory_section(dest_ws, sr, er, active_substances, kor_data_map, ck, mode=option)
 
+                # [수정됨] 표 사이의 빈 행 숨김 (1002, 1418, 1619~1623, 2025행)
                 for r in [1002, 1418] + list(range(1619, 1624)) + [2025]: dest_ws.row_dimensions[r].hidden = True
 
                 s14 = parsed_data["sec14"]
@@ -1500,6 +1532,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 if not name_val or "해당없음" in name_raw: name_val = "자료없음"
                 class_val = str(s14.get("CLASS", "")).strip(); pg_val = str(s14.get("PG", "")).strip(); env_val = str(s14.get("ENV", "")).strip()
                 
+                # [수정됨] B2240~B2244 순서에 맞게 UN번호, 적정선적명, 위험성등급, 용기등급, 해양오염물질 매핑
                 for i, v in enumerate([un_val, name_val, class_val if class_val and "해당없음" not in class_val else "해당없음", pg_val if pg_val and "해당없음" not in pg_val else "해당없음", env_val if env_val and "해당없음" not in env_val else "해당없음"]):
                     safe_write_force(dest_ws, 2240+i, 2, v, center=False)
 
