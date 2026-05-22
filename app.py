@@ -1759,29 +1759,55 @@ def extract_data(file_raw, is_23=False, is_83=False):
             if c and v != 0: 
                 data_map[c] = {"n": ws.cell(row=r, column=2).value, "v": v}
                 
-    # 2. HP 통합 로직 (키워드 기반 탐색)
+    # 2. HP 통합 로직 (포괄적 키워드 탐색 적용)
     elif "HP" in name_upper:
         product_name = ws.cell(row=10, column=2).value or file_raw.name
         
-        # 키워드로 열 탐색 (정규화)
+        # 열 인덱스를 찾을 변수
         col_name, col_cas, col_val = None, None, None
-        for c in range(1, ws.max_column + 1):
-            header = str(ws.cell(row=1, column=c).value or "").upper().replace('\n', ' ').replace('\r', ' ').replace('\xa0', ' ').strip()
-            if "BENZYL ALCOHOL" in header: col_name = c
-            elif "CAS" in header: col_cas = c
-            elif "TOTAL IN FRAGRANCE OIL(%)" in header: col_val = c
+        
+        # [핵심 수정] 1행에만 헤더가 있는게 아니므로 셀 전체를 돌며 열 번호를 찾음
+        for r in range(1, min(ws.max_row + 1, 100)): # 상위 100행까지 스캔
+            for c in range(1, ws.max_column + 1):
+                # 띄어쓰기, 줄바꿈 등 모든 공백을 없애서 텍스트 매칭 신뢰도 100% 보장
+                cell_text = str(ws.cell(row=r, column=c).value or "").upper()
+                cell_text_clean = cell_text.replace('\n', '').replace('\r', '').replace('\xa0', '').replace(' ', '')
+                
+                if not cell_text_clean:
+                    continue
+                    
+                # 물질명 찾는 키워드 (Benzyl alcohol 무조건 포함된다고 하셨으므로)
+                if col_name is None and "BENZYLALCOHOL" in cell_text_clean:
+                    col_name = c
+                # CAS NO 찾는 키워드
+                if col_cas is None and "CAS" in cell_text_clean:
+                    col_cas = c
+                # 수치 찾는 키워드 (Total in Fragrance Oil(%) 공백 제거본)
+                if col_val is None and "TOTALINFRAGRANCEOIL(%)" in cell_text_clean:
+                    col_val = c
             
-        # 데이터 추출: 키워드가 있으면 해당 열에서, 없으면 None 반환
-        for r in range(2, ws.max_row + 1):
-            name = ws.cell(row=r, column=col_name).value if col_name else None
-            cas = ws.cell(row=r, column=col_cas).value if col_cas else None
-            val = ws.cell(row=r, column=col_val).value if col_val else None
-            
-            c_set, v = get_cas_set(cas), clean_val(val)
-            if c_set and v != 0:
-                data_map[c_set] = {"n": str(name) if name else "지정성분", "v": v}
+            # 3개의 열을 모두 찾았다면 더 이상 불필요한 스캔 중단
+            if col_name and col_cas and col_val:
+                break
+                
+        # 만약 양식이 너무 달라서 아예 키워드를 못 찾았을 때를 대비한 기본값(Fallback)
+        if not col_name: col_name = 1
+        if not col_cas: col_cas = 2
+        if not col_val: col_val = 3
 
-    # 3. 기타(is_83, is_23)
+        # 데이터 매핑 (한 행 안에서 찾은 열 번호들을 기준으로 동일 물질 정보 묶기)
+        for r in range(1, ws.max_row + 1):
+            name = ws.cell(row=r, column=col_name).value
+            cas = ws.cell(row=r, column=col_cas).value
+            val = ws.cell(row=r, column=col_val).value
+            
+            c_set = get_cas_set(cas)
+            v = clean_val(val)
+            
+            if c_set and v != 0:
+                data_map[c_set] = {"n": str(name).strip() if name else "지정성분", "v": v}
+
+    # 3. 기타(is_83, is_23) 로직 (기존 유지)
     elif is_83:
         product_name = ws.cell(row=10, column=2).value
         for r in range(1, ws.max_row + 1):
