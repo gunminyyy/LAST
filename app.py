@@ -2142,12 +2142,24 @@ if ready:
                 m2 = {cas: d for cas, d in m2.items() if not cas.isdisjoint(TARGET_23_CAS)}
                 if m3: m3 = {cas: d for cas, d in m3.items() if not cas.isdisjoint(TARGET_23_CAS)}
 
-            all_cas_sets = set(m1.keys()) | set(m2.keys())
-            if m3: all_cas_sets |= set(m3.keys())
+            all_cas_keys = set(m1.keys()) | set(m2.keys())
+            if m3: all_cas_keys |= set(m3.keys())
+
+            # [수정됨] 중복 행 발생 방지: 겹치는 CAS 번호들을 하나의 교집합 그룹으로 완벽히 병합하는 로직
+            consolidated_cas_sets = []
+            for cas in all_cas_keys:
+                overlapping_indices = [i for i, c in enumerate(consolidated_cas_sets) if not cas.isdisjoint(c)]
+                if not overlapping_indices:
+                    consolidated_cas_sets.append(cas)
+                else:
+                    merged_set = set(cas)
+                    for i in sorted(overlapping_indices, reverse=True):
+                        merged_set |= consolidated_cas_sets.pop(i)
+                    consolidated_cas_sets.append(frozenset(merged_set))
 
             rows, mismatch = [], 0
             
-            for cas in all_cas_sets:
+            for cas in consolidated_cas_sets:
                 v1_data = next((m1[c] for c in m1 if not cas.isdisjoint(c)), None)
                 v2_data = next((m2[c] for c in m2 if not cas.isdisjoint(c)), None)
                 v3_data = next((m3[c] for c in m3 if not cas.isdisjoint(c)), None) if m3 is not None else None
