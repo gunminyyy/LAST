@@ -633,9 +633,9 @@ def fill_composition_data(ws, comp_data, cas_to_name_map, mode="CFF(K)"):
     for i in range(limit):
         current_row = start_row + i
         
-        # [수정됨] B열(2번째 컬럼) 가운데 맞춤 강제 적용
+        # [수정됨] D열(4번째 컬럼) 가운데 맞춤 강제 적용
         try:
-            ws.cell(row=current_row, column=2).alignment = ALIGN_CENTER
+            ws.cell(row=current_row, column=4).alignment = ALIGN_CENTER
         except:
             pass
 
@@ -645,7 +645,7 @@ def fill_composition_data(ws, comp_data, cas_to_name_map, mode="CFF(K)"):
             ws.row_dimensions[current_row].hidden = False
             ws.row_dimensions[current_row].height = 26.7
             safe_write_force(ws, current_row, 1, chem_name, center=False)
-            safe_write_force(ws, current_row, 4, cas_no, center=False) 
+            safe_write_force(ws, current_row, 4, cas_no, center=True) # 가운데 정렬
             safe_write_force(ws, current_row, 6, concentration if concentration else "", center=True)
         else:
             ws.row_dimensions[current_row].hidden = True
@@ -655,25 +655,20 @@ def fill_regulatory_section(ws, start_row, end_row, substances, data_map, col_ke
     limit = end_row - start_row + 1
     for i in range(limit):
         current_row = start_row + i
-        # [수정됨] A열에 내용(물질명)이 존재하는 경우
         if i < len(substances):
             substance_name = substances[i]
             safe_write_force(ws, current_row, 1, substance_name, center=False)
             cell_data = str(data_map.get(substance_name, {}).get(col_key, "")) if substance_name in data_map else ""
             
-            # [수정됨] "자료없음"이나 "해당없음"을 빈칸("")으로 지우지 않음. 오직 "nan"일 때만 빈칸 처리
             if cell_data == "nan": 
                 cell_data = ""
                 
             safe_write_force(ws, current_row, 2, cell_data, center=False)
-            
-            # [수정됨] A열에 물질명이 존재하면 무조건 숨김 해제
             ws.row_dimensions[current_row].hidden = False
             
             _, h = format_and_calc_height_sec47(cell_data, mode=mode)
             ws.row_dimensions[current_row].height = max(h, 24.0)
         else:
-            # [수정됨] A열에 물질명이 없는 남는 행들만 숨김 처리
             safe_write_force(ws, current_row, 1, "")
             safe_write_force(ws, current_row, 2, "")
             ws.row_dimensions[current_row].hidden = True
@@ -1001,11 +996,11 @@ def parse_pdf_final(doc, mode="CFF(K)"):
 
         s14 = {}
         s14["UN"] = re.sub(r'\D', '', extract_section_smart(all_lines, "14.1 UN number", "14.2 Proper", mode))
-        s14["NAME"] = re.sub(r'\([^)]*\)', '', re.sub(r'(?i)shipping\s*name', '', re.sub(r'(?i)proper\s*shipping\s*name', '', extract_section_smart(all_lines, "14.2 Proper", "14.3 Transport", mode)))).strip()
-        class_match = re.search(r'(\d)', extract_section_smart(all_lines, "14.3 Transport hazard class", "14.4 Packing group", mode))
+        s14["NAME"] = re.sub(r'\([^)]*\)', '', re.sub(r'(?i)shipping\s*name', '', re.sub(r'(?i)proper\s*shipping\s*name', '', extract_section_smart(all_lines, "14.2 Proper", "14.3 Transport", mode)))).replace("-", "").strip()
+        class_match = re.search(r'(\d)', extract_section_smart(all_lines, "14.3 Transport hazard class", "14.4 Packing group", mode).replace("-", ""))
         s14["CLASS"] = class_match.group(1) if class_match else ""
-        s14["PG"] = extract_section_smart(all_lines, "14.4 Packing group", "14.5 Environmental hazard", mode)
-        s14["ENV"] = extract_section_smart(all_lines, "14.5 Environmental hazard", "IATA", mode)
+        s14["PG"] = extract_section_smart(all_lines, "14.4 Packing group", "14.5 Environmental hazard", mode).replace("-", "").strip()
+        s14["ENV"] = extract_section_smart(all_lines, "14.5 Environmental hazard", "IATA", mode).replace("-", "").strip()
         result["sec14"] = s14
 
         return result
@@ -1401,9 +1396,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 for sr, er, ck in [(806, 1005, 'F'), (1007, 1206, 'G'), (1208, 1407, 'H'), (1416, 1615, 'P'), (1617, 1816, 'Q'), (1822, 2021, 'T'), (2023, 2222, 'U'), (2224, 2423, 'V')]:
                     fill_regulatory_section(dest_ws, sr, er, active_substances, eng_data_map, ck, mode=option)
 
-                for r in [1006, 1207] + list(range(1408, 1416)) + [1616] + list(range(1817, 1822)) + [2022, 2223]: 
-                    dest_ws.row_dimensions[r].hidden = True
-
                 s14 = parsed_data["sec14"]
                 un_raw = str(s14.get("UN", "")).strip()
                 un_val = re.sub(r"\D", "", un_raw)
@@ -1499,9 +1491,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
 
                 for sr, er, ck in [(806, 1005, 'F'), (1007, 1206, 'G'), (1208, 1407, 'H'), (1416, 1615, 'P'), (1617, 1816, 'Q'), (1822, 2021, 'T'), (2023, 2222, 'U'), (2224, 2423, 'V')]:
                     fill_regulatory_section(dest_ws, sr, er, active_substances, eng_data_map, ck, mode=option)
-
-                for r in [1006, 1207] + list(range(1408, 1416)) + [1616] + list(range(1817, 1822)) + [2022, 2223]: 
-                    dest_ws.row_dimensions[r].hidden = True
 
                 s14 = parsed_data["sec14"]
                 un_raw = str(s14.get("UN", "")).strip()
@@ -1609,8 +1598,6 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
 
                 for sr, er, ck in [(601, 800, 'F'), (802, 1001, 'G'), (1003, 1202, 'H'), (1218, 1417, 'P'), (1419, 1618, 'Q'), (1624, 1823, 'T'), (1825, 2024, 'U'), (2026, 2225, 'V')]:
                     fill_regulatory_section(dest_ws, sr, er, active_substances, kor_data_map, ck, mode=option)
-
-                for r in [1002, 1418] + list(range(1619, 1624)) + [2025]: dest_ws.row_dimensions[r].hidden = True
 
                 s14 = parsed_data["sec14"]
                 un_raw = str(s14.get("UN", "")).strip(); un_val = re.sub(r"\D", "", un_raw)
