@@ -1743,6 +1743,7 @@ def extract_data(file_raw, is_23=False, is_83=False):
     val_a1 = str(ws.cell(row=1, column=1).value or "").strip()
     val_b1 = str(ws.cell(row=1, column=2).value or "").strip()
     
+    # 1. CFF 로직 (기존 유지)
     if val_a1 == "성분코드" and val_b1 == "성분국문명":
         product_name = file_raw.name
         empty_count = 0
@@ -1758,26 +1759,35 @@ def extract_data(file_raw, is_23=False, is_83=False):
             if c and v != 0: 
                 data_map[c] = {"n": ws.cell(row=r, column=2).value, "v": v}
                 
+    # 2. HP 통합 로직 (키워드 기반 탐색)
+    elif "HP" in name_upper:
+        product_name = ws.cell(row=10, column=2).value or file_raw.name
+        
+        # 키워드로 열 탐색 (정규화)
+        col_name, col_cas, col_val = None, None, None
+        for c in range(1, ws.max_column + 1):
+            header = str(ws.cell(row=1, column=c).value or "").upper().replace('\n', ' ').replace('\r', ' ').replace('\xa0', ' ').strip()
+            if "BENZYL ALCOHOL" in header: col_name = c
+            elif "CAS" in header: col_cas = c
+            elif "TOTAL IN FRAGRANCE OIL(%)" in header: col_val = c
+            
+        # 데이터 추출: 키워드가 있으면 해당 열에서, 없으면 None 반환
+        for r in range(2, ws.max_row + 1):
+            name = ws.cell(row=r, column=col_name).value if col_name else None
+            cas = ws.cell(row=r, column=col_cas).value if col_cas else None
+            val = ws.cell(row=r, column=col_val).value if col_val else None
+            
+            c_set, v = get_cas_set(cas), clean_val(val)
+            if c_set and v != 0:
+                data_map[c_set] = {"n": str(name) if name else "지정성분", "v": v}
+
+    # 3. 기타(is_83, is_23)
     elif is_83:
         product_name = ws.cell(row=10, column=2).value
-        empty_count = 0
         for r in range(1, ws.max_row + 1):
-            cas_raw_b = ws.cell(row=r, column=2).value
-            cas_raw_c = ws.cell(row=r, column=3).value
-            
-            if (cas_raw_b is None or str(cas_raw_b).strip() == "") and (cas_raw_c is None or str(cas_raw_c).strip() == ""):
-                empty_count += 1
-                if empty_count >= 10: break
-            else:
-                empty_count = 0
-
-            c_b = get_cas_set(cas_raw_b)
-            c_c = get_cas_set(cas_raw_c)
-            c = c_b if c_b else c_c
-            
-            v_val = ws.cell(row=r, column=4).value if (not c_b and c_c) else ws.cell(row=r, column=3).value
-            v = clean_val(v_val)
-
+            cas_raw_b, cas_raw_c = ws.cell(row=r, column=2).value, ws.cell(row=r, column=3).value
+            c = get_cas_set(cas_raw_b) if get_cas_set(cas_raw_b) else get_cas_set(cas_raw_c)
+            v = clean_val(ws.cell(row=r, column=4).value if (not get_cas_set(cas_raw_b) and get_cas_set(cas_raw_c)) else ws.cell(row=r, column=3).value)
             if c and v != 0: data_map[c] = {"n": ws.cell(row=r, column=1).value, "v": v}
             
     elif is_23:
@@ -1786,37 +1796,10 @@ def extract_data(file_raw, is_23=False, is_83=False):
             c, v = get_cas_set(ws.cell(row=r, column=2).value), clean_val(ws.cell(row=r, column=3).value)
             if c and v != 0: data_map[c] = {"n": ws.cell(row=r, column=1).value or "지정성분", "v": v}
             
-    # [수정됨] 모든 HP 파일을 동일하게 키워드 기반 로직으로 처리
-    elif "HP" in name_upper:
-        product_name = ws.cell(row=10, column=2).value or file_raw.name
-        
-        # 키워드로 열 탐색
-        col_name, col_cas, col_val = None, None, None
-        for c in range(1, ws.max_column + 1):
-            h = str(ws.cell(row=1, column=c).value or "").upper()
-            if any(k in h for k in ["BENZYL ALCOHOL", "NAME", "SUBSTANCE", "INGREDIENT"]): col_name = c
-            elif "CAS" in h: col_cas = c
-            elif "TOTAL IN FRAGRANCE" in h: col_val = c
-            
-        # 데이터 추출 (키워드 매칭이 안되면 기존 로직 백업)
-        for r in range(2, ws.max_row + 1):
-            name = ws.cell(row=r, column=col_name).value if col_name else ws.cell(row=r, column=1).value
-            cas = ws.cell(row=r, column=col_cas).value if col_cas else ws.cell(row=r, column=2).value
-            val = ws.cell(row=r, column=col_val).value if col_val else ws.cell(row=r, column=3).value
-            c, v = get_cas_set(cas), clean_val(val)
-            if c and v != 0: data_map[c] = {"n": name, "v": v}
-
     else:
         product_name = ws.cell(row=7, column=4).value
-        empty_count = 0
         for r in range(13, ws.max_row + 1):
             cas_raw = ws.cell(row=r, column=6).value
-            if cas_raw is None or str(cas_raw).strip() == "":
-                empty_count += 1
-                if empty_count >= 10: break
-            else:
-                empty_count = 0
-                
             c, v = get_cas_set(cas_raw), clean_val(ws.cell(row=r, column=12).value)
             if c and v != 0: data_map[c] = {"n": ws.cell(row=r, column=2).value, "v": v}
     
