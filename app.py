@@ -1853,7 +1853,7 @@ def process_others(customer_name, product_name, selected_files):
                 context = {
                     "CUSTOMER": customer_name,
                     "PRODUCT": product_name,
-                    "DATE": datetime.now().strftime("%d. %b. %Y").upper()
+                    "DATE": datetime.now().strftime("%Y/%b/%d").upper()
                 }
                 
                 # 데이터 렌더링
@@ -1865,7 +1865,11 @@ def process_others(customer_name, product_name, selected_files):
                 doc_io.seek(0)
                 
                 # 제품명이 포함된 새로운 파일명으로 ZIP 안에 추가
-                output_name = f"{product_name} {file_name}"
+                if "STH" in file_name:
+                    output_name = file_name.replace("STH", product_name)
+                else:
+                    output_name = f"{product_name} {file_name}"
+                    
                 zip_file.writestr(output_name, doc_io.getvalue())
         
         zip_buffer.seek(0)
