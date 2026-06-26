@@ -313,11 +313,23 @@ def logic_hp_83(input_df, template_path, customer_name, product_name):
         for cell in row:
             if not isinstance(cell, MergedCell) and str(cell.value).startswith('='): cell.value = None
     if "Sheet2" in wb.sheetnames: del wb["Sheet2"]
+
+    is_new_format = False
+    if not input_df.empty:
+        if any("Ref. No" in str(col) for col in input_df.columns) or any("Ref. No" in str(val) for val in input_df.iloc[:, 0].head(20)):
+            is_new_format = True
+
     source_data = {}
     for idx, row in input_df.iterrows():
-        cas_text = row.iloc[1] if len(row) > 1 else None
-        val = row.iloc[2] if len(row) > 2 else None
+        if is_new_format:
+            cas_text = row.iloc[2] if len(row) > 2 else None
+            val = row.iloc[3] if len(row) > 3 else None
+        else:
+            cas_text = row.iloc[1] if len(row) > 1 else None
+            val = row.iloc[2] if len(row) > 2 else None
+            
         for cas in extract_cas(cas_text): source_data[cas] = val
+        
     for r in range(1, ws.max_row + 1):
         template_cas_text = ws.cell(row=r, column=2).value
         if template_cas_text:
@@ -337,10 +349,21 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
     for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=43):
         for cell in row: 
             if not isinstance(cell, MergedCell): cell.value = None
+            
+    is_new_format = False
+    if not input_df.empty:
+        if any("Ref. No" in str(col) for col in input_df.columns) or any("Ref. No" in str(val) for val in input_df.iloc[:, 0].head(20)):
+            is_new_format = True
+
     source_data = {}
     for idx, row in input_df.iterrows():
-        cas_text = row.iloc[1] if len(row) > 1 else None
-        val = row.iloc[2] if len(row) > 2 else None
+        if is_new_format:
+            cas_text = row.iloc[2] if len(row) > 2 else None
+            val = row.iloc[3] if len(row) > 3 else None
+        else:
+            cas_text = row.iloc[1] if len(row) > 1 else None
+            val = row.iloc[2] if len(row) > 2 else None
+            
         for cas in extract_cas(cas_text): source_data[cas] = val
         
     for r in range(1, ws.max_row + 1):
