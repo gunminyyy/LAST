@@ -1201,7 +1201,8 @@ def parse_pdf_final(doc, mode="CFF(K)"):
         if "16.그밖의" in clean_txt or "16.기타" in clean_txt: end_15 = i; break
     sec15_lines = all_lines[start_15:(end_15 if end_15 != -1 else len(all_lines))] if start_15 != -1 else all_lines
         
-    danger_act_text = extract_section_smart(sec15_lines, "위험물안전관리법에 의한 규제", ["마. 폐기물", "마.폐기물"], mode) or extract_section_smart(sec15_lines, "위험물안전관리법", ["마. 폐기물", "마.폐기물"], mode)
+    # 수정된 부분: 폐기물 관련 항목명을 '라. 폐기물', '폐기물관리법' 등으로 추가해 파싱이 제대로 끊기도록 수정했습니다.
+    danger_act_text = extract_section_smart(sec15_lines, "위험물안전관리법에 의한 규제", ["라. 폐기물", "라.폐기물", "마. 폐기물", "마.폐기물", "폐기물관리법"], mode) or extract_section_smart(sec15_lines, "위험물안전관리법", ["라. 폐기물", "라.폐기물", "마. 폐기물", "마.폐기물", "폐기물관리법"], mode)
     result["sec15"] = {"DANGER": danger_act_text, "FULL_TEXT": "\n".join([l['text'] for l in sec15_lines])}
 
     return result
@@ -1212,7 +1213,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
     loaded_refs, _ = get_reference_images()
     
     template_path = get_resource_path(os.path.join("MSDS templates", "MSDS 영문.xlsx" if option in ["CFF(E)", "HP(E)"] else "MSDS 국문.xlsx"))
-    if not os.path.exists(template_path): return {"error": f"템플릿을 찾을 수 없습니다: {template_path}"}
+    if not os.path.exists(template_path): return {"error": f"템플릿을 찾을 수 정없습니다: {template_path}"}
     
     new_files = []; new_download_data = {}
     code_map = {}; cas_name_map = {}; kor_data_map = {}; eng_data_map = {}
