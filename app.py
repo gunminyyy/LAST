@@ -413,6 +413,7 @@ def process_value_ifra(val_str):
         clean_str = num_match.group(0)
         val_float = float(clean_str)
         if val_float == 0.0: return "Not Permitted"
+        if val_float == 100.0: return "100%"
         s = str(val_float)
         if '.' in s:
             int_part, dec_part = s.split('.')
