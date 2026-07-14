@@ -58,7 +58,7 @@ st.markdown("""
         white-space: nowrap !important;
     }
     
-    /* 4. 기타 양식(OTHERS) 체크박스 줄바꿈 방지 및 동일 간격 설정 */
+    /* 4. 기타 양식(OTHERS) 체크박스 깔끔하고 균일한 사이즈로 통일 */
     div[data-testid="stCheckbox"] label p {
         white-space: nowrap !important;
         overflow: hidden !important;
@@ -67,11 +67,15 @@ st.markdown("""
     }
     div[data-testid="stCheckbox"] {
         min-height: auto !important;
-        padding: 0 !important;
+        width: 260px !important; /* 너비를 한 사이즈로 고정 */
+        padding: 6px 12px !important; /* 내부 여백 통일 */
+        background-color: #f8f9fa !important; /* 깔끔한 박스 형태를 위한 배경색 */
+        border: 1px solid #ddd !important; /* 테두리 추가 */
+        border-radius: 5px !important; /* 테두리 둥글게 */
     }
     div.row-widget.stCheckbox {
         margin-top: 0 !important;
-        margin-bottom: 0.2rem !important; /* 항목 간 간격을 0.2rem으로 균일하게 통일 */
+        margin-bottom: 0.3rem !important;
     }
     
     /* 5. 기타 양식 체크박스 선택 시 글씨 색상 빨간색으로 변경 */
@@ -1902,6 +1906,7 @@ def process_others(customer_name, product_name, selected_files):
         
     except Exception as e:
         return None, f"기타 양식 처리 중 오류 발생: {e}"
+
 # ==============================================================================
 # [UI 레이아웃 구성: 파트 1 (통합 양식 변환기)]
 # ==============================================================================
@@ -2135,19 +2140,26 @@ if batch_run:
                 
             # 4. MSDS
             if msds_up:
-                res_dict = process_msds(msds_up, global_product, global_mode, msds_ri, msds_kor_file, msds_kor_ver)
-                if "error" in res_dict: st.error(f"MSDS 일괄 변환 오류: {res_dict['error']}")
-                else: st.session_state['msds_res'] = [{'fname': f, 'data': res_dict["data"][f]} for f in res_dict["files"]]
+                if "HP" in global_mode and not msds_ri.strip():
+                    st.warning("⚠️ MSDS: 굴절률(RI)이 입력되지 않아 MSDS 파일은 일괄 변환에서 제외되었습니다.")
+                else:
+                    try:
+                        res_dict = process_msds(msds_up, global_product, global_mode, msds_ri, msds_kor_file, msds_kor_ver)
+                        if "error" in res_dict: st.error(f"MSDS 일괄 변환 오류: {res_dict['error']}")
+                        else: st.session_state['msds_res'] = [{'fname': f, 'data': res_dict["data"][f]} for f in res_dict["files"]]
+                    except Exception as e: st.error(f"MSDS 일괄 변환 오류: {e}")
 
             # 5. OTHERS (체크박스에서 선택된 파일만 변환)
             if selected_others:
-                res, info = process_others(global_customer, global_product, selected_others)
-                if res:
-                    st.session_state['others_res'] = res.getvalue()
-                    st.session_state['others_fname'] = info
-                else: st.error(f"OTHERS 일괄 변환 오류: {info}")
+                try:
+                    res, info = process_others(global_customer, global_product, selected_others)
+                    if res:
+                        st.session_state['others_res'] = res.getvalue()
+                        st.session_state['others_fname'] = info
+                    else: st.error(f"OTHERS 일괄 변환 오류: {info}")
+                except Exception as e: st.error(f"OTHERS 일괄 변환 오류: {e}")
             
-            st.success("✅ 파일이 첨부되거나 선택된 모든 항목의 일괄 변환이 완료되었습니다. 각 섹션의 우측에서 결과를 다운로드하세요!")
+            st.success("✅ 조건이 충족된 항목들의 일괄 변환 처리가 완료되었습니다. 각 섹션의 우측에서 결과를 확인/다운로드하세요!")
 
 
 # ==============================================================================
