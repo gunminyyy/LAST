@@ -58,23 +58,27 @@ st.markdown("""
         white-space: nowrap !important;
     }
     
-    /* 4. 기타 양식(OTHERS) 체크박스: 작은 기본 정사각형 형태로 사이즈 통일 및 배경 제거 */
+    /* 4. 기타 양식(OTHERS) 체크박스: 파일명 길이에 따라 클릭 영역이 변하지 않도록 고정 및 네모 아이콘 찌그러짐 방지 */
+    div[data-testid="stCheckbox"] {
+        width: 320px !important; /* 전체 박스 너비를 동일하게 고정하여 깔끔한 열 형태 유지 */
+        min-height: auto !important;
+        padding: 4px 8px !important;
+    }
+    /* 실제 체크되는 네모 박스(정사각형) 크기 절대 고정 (파일명에 밀려 늘어나지 않음) */
+    div[data-testid="stCheckbox"] label > div:first-child {
+        flex-shrink: 0 !important; 
+    }
+    /* 텍스트(파일명) 설정: 넘치는 글자는 ... 으로 깔끔하게 처리 */
     div[data-testid="stCheckbox"] label p {
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         line-height: 1.5 !important;
-    }
-    div[data-testid="stCheckbox"] {
-        min-height: auto !important;
-        padding: 0 !important;
-        width: auto !important;
-        background-color: transparent !important;
-        border: none !important;
+        margin-left: 5px !important; /* 체크박스 네모와 글자 사이 간격 */
     }
     div.row-widget.stCheckbox {
         margin-top: 0 !important;
-        margin-bottom: 0.3rem !important;
+        margin-bottom: 0.2rem !important; /* 상하 간격 균일화 */
     }
     
     /* 5. 기타 양식 체크박스 선택 시 글씨 색상 빨간색으로 변경 */
