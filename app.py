@@ -58,27 +58,40 @@ st.markdown("""
         white-space: nowrap !important;
     }
     
-    /* 4. 기타 양식(OTHERS) 체크박스: 파일명 길이에 따라 클릭 영역이 변하지 않도록 고정 및 네모 아이콘 찌그러짐 방지 */
-    div[data-testid="stCheckbox"] {
-        width: 320px !important; /* 전체 박스 너비를 동일하게 고정하여 깔끔한 열 형태 유지 */
-        min-height: auto !important;
-        padding: 4px 8px !important;
+    /* 4. 기타 양식(OTHERS) 체크박스: 네모 아이콘 늘어남 완벽 차단 및 정사각형 고정 */
+    div[data-testid="stCheckbox"] label {
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
     }
-    /* 실제 체크되는 네모 박스(정사각형) 크기 절대 고정 (파일명에 밀려 늘어나지 않음) */
-    div[data-testid="stCheckbox"] label > div:first-child {
-        flex-shrink: 0 !important; 
+    
+    /* 💡 원인 해결: 파일명 길이에 비례해서 네모 박스가 가로로 길게 늘어나는 현상을 막기 위해 크기 절대 고정 */
+    div[data-testid="stCheckbox"] label > div:first-of-type {
+        width: 18px !important;
+        height: 18px !important;
+        min-width: 18px !important;
+        min-height: 18px !important;
+        max-width: 18px !important;
+        max-height: 18px !important;
+        flex: 0 0 18px !important; /* 텍스트 길이에 상관없이 완벽한 18px 정사각형으로 크기 고정 */
+        border-radius: 4px !important; /* 체크박스를 살짝 둥근 사각형으로 디자인 */
+        margin-right: 8px !important; /* 네모 박스와 텍스트 사이 간격 */
     }
-    /* 텍스트(파일명) 설정: 넘치는 글자는 ... 으로 깔끔하게 처리 */
+    
+    /* 파일명(텍스트) 설정: 길어지면 ...으로 깔끔하게 처리 */
     div[data-testid="stCheckbox"] label p {
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
-        line-height: 1.5 !important;
-        margin-left: 5px !important; /* 체크박스 네모와 글자 사이 간격 */
+        line-height: 18px !important; /* 체크박스와 수직 중앙을 맞추기 위해 높이 동일 설정 */
+        margin: 0 !important;
+        padding: 0 !important;
     }
+    
+    /* 체크박스 위아래 항목 간 간격 균일화 */
     div.row-widget.stCheckbox {
         margin-top: 0 !important;
-        margin-bottom: 0.2rem !important; /* 상하 간격 균일화 */
+        margin-bottom: 0.3rem !important;
     }
     
     /* 5. 기타 양식 체크박스 선택 시 글씨 색상 빨간색으로 변경 */
