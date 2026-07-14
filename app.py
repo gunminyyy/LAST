@@ -58,7 +58,7 @@ st.markdown("""
         white-space: nowrap !important;
     }
     
-    /* 4. 기타 양식(OTHERS) 체크박스 깔끔하고 균일한 사이즈로 통일 */
+    /* 4. 기타 양식(OTHERS) 체크박스: 작은 기본 정사각형 형태로 사이즈 통일 및 배경 제거 */
     div[data-testid="stCheckbox"] label p {
         white-space: nowrap !important;
         overflow: hidden !important;
@@ -67,11 +67,10 @@ st.markdown("""
     }
     div[data-testid="stCheckbox"] {
         min-height: auto !important;
-        width: 260px !important; /* 너비를 한 사이즈로 고정 */
-        padding: 6px 12px !important; /* 내부 여백 통일 */
-        background-color: #f8f9fa !important; /* 깔끔한 박스 형태를 위한 배경색 */
-        border: 1px solid #ddd !important; /* 테두리 추가 */
-        border-radius: 5px !important; /* 테두리 둥글게 */
+        padding: 0 !important;
+        width: auto !important;
+        background-color: transparent !important;
+        border: none !important;
     }
     div.row-widget.stCheckbox {
         margin-top: 0 !important;
