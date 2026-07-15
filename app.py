@@ -1077,7 +1077,7 @@ def parse_pdf_final(doc, mode="CFF(K)"):
             "B126": extract_section_smart(all_lines, "4.2 In case of eye contact", "4.3 In case of skin contact", mode),
             "B127": extract_section_smart(all_lines, "4.3 In case of skin contact", "4.4 If inhaled", mode),
             "B128": extract_section_smart(all_lines, "4.4 If inhaled", "4.5 If swallowed", mode),
-            "B129": extract_section_smart(all_lines, "4.5 If swallowed", "4.6 Special note for doctors", mode).replace("Medical personnel, and to ensure that take protection measures is recognized for its substance", ""),
+            "B129": extract_section_smart(all_lines, "4.5 If swallowed", ["4.6 Special note for doctors", "5. Firefighting measures", "5. FIREFIGHTING"], mode).replace("Medical personnel, and to ensure that take protection measures is recognized for its substance", ""),
             "B132": extract_section_smart(all_lines, "5.1 Extinguishing media", "5.2 Special hazards", mode),
             "B134": extract_section_smart(all_lines, "5.2 Special hazards", "5.3 Advice for firefighters", mode).replace("substance or mixture", ""),
             "B136": extract_section_smart(all_lines, "5.3 Advice for firefighters", "6. Accidental", mode),
@@ -1702,7 +1702,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 
                 if option == "HP(K)" and refractive_index_input: safe_write_force(dest_ws, 588, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
                 else:
-                    r_match = re.search(r'([\d\.]+)', s9.get["B182"].replace("(20℃)", ""))
+                    r_match = re.search(r'([\d\.]+)', s9["B182"].replace("(20℃)", ""))
                     safe_write_force(dest_ws, 588, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
 
                 for sr, er, ck in [(601, 800, 'F'), (802, 1001, 'G'), (1003, 1202, 'H'), (1218, 1417, 'P'), (1419, 1618, 'Q'), (1624, 1823, 'T'), (1825, 2024, 'U'), (2026, 2225, 'V')]:
