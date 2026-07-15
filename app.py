@@ -1193,7 +1193,7 @@ def parse_pdf_final(doc, mode="CFF(K)"):
                 cas_found = regex_cas_strict.findall(txt)
                 if cas_found:
                     c_val = cas_found[0].replace(" ", "")
-                    txt_no_cas = re.sub(r'\b(?:(?:19|20)\d{2}-\d{1,2}-\d+|KE-\d+)\b', ' ', txt.replace(cas_found[0], " " * len(cas_found[0])), flags=re.IGNORECASE)
+                    txt_no_cas = re.sub(r'\b(?:\d{2,7}-\d{1,3}-\d{1,6}|KE-\d+)\b', ' ', txt.replace(cas_found[0], " " * len(cas_found[0])), flags=re.IGNORECASE)
                     m_range = re.search(r'\b(\d+(?:\.\d+)?)\s*(?:-|~)\s*(\d+(?:\.\d+)?)\b', txt_no_cas)
                     if m_range:
                         s, e = m_range.group(1), m_range.group(2)
@@ -1213,7 +1213,7 @@ def parse_pdf_final(doc, mode="CFF(K)"):
                     cas_found_loose = regex_cas_ec_kill.findall(txt)
                     if cas_found_loose and re.match(r'\d{2,7}-\d{2}-\d', cas_found_loose[0].replace(" ", "")): c_val = cas_found_loose[0].replace(" ", "")
                 
-                txt_clean = re.sub(r'\b(?:(?:19|20)\d{2}-\d{1,2}-\d+|KE-\d+)\b', ' ', regex_cas_ec_kill.sub(" ", txt), flags=re.IGNORECASE)
+                txt_clean = re.sub(r'\b(?:\d{2,7}-\d{1,3}-\d{1,6}|KE-\d+)\b', ' ', regex_cas_ec_kill.sub(" ", txt), flags=re.IGNORECASE)
                 m_tilde = regex_tilde_range.search(txt_clean)
                 if m_tilde:
                     s, e = m_tilde.group(1), m_tilde.group(2)
