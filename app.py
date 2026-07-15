@@ -2116,7 +2116,7 @@ with col4_2:
     if "E" in global_mode:
         st.info("💡 영문 양식 생성 시 국문 파일 첨부")
         msds_kor_file = st.file_uploader("국문 엑셀 파일", type="xlsx", key="msds_kor_file")
-        msds_kor_ver = st.radio("국문 양식 버전", ["신버전", "구버전"], horizontal=True, key="msds_kor_ver")
+        msds_kor_ver = st.radio("국문 양식 버전", ["신버전(물질 행 200개로 늘린거)", "구버전"], horizontal=True, key="msds_kor_ver")
 
     if st.button("MSDS 변환", use_container_width=True):
         if not msds_up or not global_customer or not global_product: st.warning("고객사명, 제품명, 원본 파일을 모두 입력해주세요.")
