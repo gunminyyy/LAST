@@ -257,35 +257,36 @@ def extract_cas(text):
     return re.findall(r'\d{2,7}-\d{2}-\d', clean_text)
 
 
-def restore_company_address(ws):
-    """openpyxl 저장 시 소실되는 텍스트 상자(회사 주소)를 기존 서식과 완벽히 동일하게 셀에 복원합니다."""
-    addr_font = Font(name='Arial', size=9)
-    addr_align = Alignment(horizontal='left', vertical='center')
+def preserve_original_shapes(wb, template_path):
+    """openpyxl이 텍스트상자 등을 삭제하는 근본적 한계를 우회하기 위해, 
+    원본 템플릿의 drawing과 media(이미지/텍스트박스) 데이터를 강제 주입하여 완벽하게 복원합니다."""
+    temp_io = io.BytesIO()
+    wb.save(temp_io)
+    temp_io.seek(0)
     
-    # 병합 해제 및 안전한 값 기입을 위해 예외 처리 병행
-    for r, text in [(3, "1301, Ace Gwanggyo Tower 2, 91, Chang Yong Dae-ro 256, Young Tong-Goo, Soowon-Si, South Korea"),
-                    (4, "TEL: +82(0)31-8014-2626 FAX: +82(0)31-8014-2629")]:
-        cell = ws.cell(row=r, column=4) # D열(4번째)에 기입
-        try: 
-            cell.value = text
-        except AttributeError:
-            try:
-                for rng in list(ws.merged_cells.ranges):
-                    if cell.coordinate in rng:
-                        ws.unmerge_cells(str(rng))
-                        cell = ws.cell(row=r, column=4)
-                        break
-                cell.value = text
-            except: pass
+    final_io = io.BytesIO()
+    with zipfile.ZipFile(template_path, 'r') as template_zip:
+        # 템플릿 원본에서 모든 drawing(텍스트박스, 도형) 및 media(이미지) 데이터 추출
+        preserve_files = {name: template_zip.read(name) for name in template_zip.namelist() if name.startswith('xl/drawings/') or name.startswith('xl/media/')}
         
-        cell.font = addr_font
-        cell.alignment = addr_align
+    with zipfile.ZipFile(temp_io, 'r') as openpyxl_zip:
+        with zipfile.ZipFile(final_io, 'w') as final_zip:
+            for item in openpyxl_zip.infolist():
+                # openpyxl이 생성한 불완전한 drawing/media 파일은 제외
+                if item.filename.startswith('xl/drawings/') or item.filename.startswith('xl/media/'):
+                    continue
+                final_zip.writestr(item, openpyxl_zip.read(item.filename))
+            
+            # 템플릿의 완벽한 원본 drawing/media 데이터를 그대로 덮어쓰기
+            for name, data in preserve_files.items():
+                final_zip.writestr(name, data)
+                
+    return final_io.getvalue() # bytes 형태로 반환
 
 
 def logic_cff_83(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    restore_company_address(ws) # 텍스트 상자 소실 방어 로직 추가
     
     for row in ws.iter_rows(min_col=3, max_col=3, min_row=1):
         for cell in row:
@@ -307,12 +308,12 @@ def logic_cff_83(input_df, template_path, customer_name, product_name):
     ws['B9'] = customer_name
     ws['B10'] = product_name
     ws['E10'] = datetime.now().strftime("%Y-%m-%d")
-    return wb
+    
+    return preserve_original_shapes(wb, template_path)
 
 def logic_cff_26(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    restore_company_address(ws) # 텍스트 상자 소실 방어 로직 추가
     
     for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=43):
         for cell in row: 
@@ -354,12 +355,12 @@ def logic_cff_26(input_df, template_path, customer_name, product_name):
     for row in ws.iter_rows(min_col=3, max_col=6, min_row=18, max_row=43):
         for cell in row: 
             if not isinstance(cell, MergedCell): cell.alignment = align_center
-    return wb
+            
+    return preserve_original_shapes(wb, template_path)
 
 def logic_hp_83(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    restore_company_address(ws) # 텍스트 상자 소실 방어 로직 추가
     
     for row in ws.iter_rows(min_col=3, max_col=3, min_row=1):
         for cell in row:
@@ -405,12 +406,12 @@ def logic_hp_83(input_df, template_path, customer_name, product_name):
                         if not isinstance(target, MergedCell): target.value = val_to_insert
                     break 
     ws['B9'] = customer_name; ws['B10'] = product_name; ws['E10'] = datetime.now().strftime("%Y-%m-%d")
-    return wb
+    
+    return preserve_original_shapes(wb, template_path)
 
 def logic_hp_26(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    restore_company_address(ws) # 텍스트 상자 소실 방어 로직 추가
     
     for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=43):
         for cell in row: 
@@ -477,9 +478,14 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
     for row in ws.iter_rows(min_col=3, max_col=6, min_row=18, max_row=43):
         for cell in row: 
             if not isinstance(cell, MergedCell): cell.alignment = align_center
-    return wb
+            
+    return preserve_original_shapes(wb, template_path)
 
 def to_excel(data):
+    # 이제 bytes 형태 데이터가 바로 넘어올 수 있도록 처리 방어막 추가
+    if isinstance(data, bytes):
+        return data
+        
     output = io.BytesIO()
     if isinstance(data, pd.DataFrame):
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -1696,7 +1702,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 
                 if option == "HP(K)" and refractive_index_input: safe_write_force(dest_ws, 588, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
                 else:
-                    r_match = re.search(r'([\d\.]+)', s9["B182"].replace("(20℃)", ""))
+                    r_match = re.search(r'([\d\.]+)', s9.get("B182"].replace("(20℃)", ""))
                     safe_write_force(dest_ws, 588, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
 
                 for sr, er, ck in [(601, 800, 'F'), (802, 1001, 'G'), (1003, 1202, 'H'), (1218, 1417, 'P'), (1419, 1618, 'Q'), (1624, 1823, 'T'), (1825, 2024, 'U'), (2026, 2225, 'V')]:
