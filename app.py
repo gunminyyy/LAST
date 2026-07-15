@@ -334,20 +334,32 @@ def logic_hp_83(input_df, template_path, customer_name, product_name):
             if not isinstance(cell, MergedCell) and str(cell.value).startswith('='): cell.value = None
     if "Sheet2" in wb.sheetnames: del wb["Sheet2"]
 
-    is_new_format = False
-    if not input_df.empty:
-        if any("Ref. No" in str(col) for col in input_df.columns) or any("Ref. No" in str(val) for val in input_df.iloc[:, 0].head(20)):
-            is_new_format = True
+    col_cas_idx, col_val_idx = None, None
+    for c_idx, col_name in enumerate(input_df.columns):
+        clean_text = str(col_name).upper().replace('\n', '').replace('\r', '').replace('\xa0', '').replace(' ', '')
+        if col_cas_idx is None and "CAS" in clean_text: col_cas_idx = c_idx
+        if col_val_idx is None and "TOTALINFRAGRANCEOIL(%)" in clean_text: col_val_idx = c_idx
+        
+    if col_cas_idx is None or col_val_idx is None:
+        for r_idx in range(min(len(input_df), 100)):
+            for c_idx in range(len(input_df.columns)):
+                clean_text = str(input_df.iat[r_idx, c_idx]).upper().replace('\n', '').replace('\r', '').replace('\xa0', '').replace(' ', '')
+                if col_cas_idx is None and "CAS" in clean_text: col_cas_idx = c_idx
+                if col_val_idx is None and "TOTALINFRAGRANCEOIL(%)" in clean_text: col_val_idx = c_idx
+            if col_cas_idx is not None and col_val_idx is not None: break
+
+    if col_cas_idx is None or col_val_idx is None:
+        is_new_format = False
+        if not input_df.empty:
+            if any("Ref. No" in str(col) for col in input_df.columns) or any("Ref. No" in str(val) for val in input_df.iloc[:, 0].head(20)):
+                is_new_format = True
+        if col_cas_idx is None: col_cas_idx = 2 if is_new_format else 1
+        if col_val_idx is None: col_val_idx = 3 if is_new_format else 2
 
     source_data = {}
     for idx, row in input_df.iterrows():
-        if is_new_format:
-            cas_text = row.iloc[2] if len(row) > 2 else None
-            val = row.iloc[3] if len(row) > 3 else None
-        else:
-            cas_text = row.iloc[1] if len(row) > 1 else None
-            val = row.iloc[2] if len(row) > 2 else None
-            
+        cas_text = row.iloc[col_cas_idx] if len(row) > col_cas_idx else None
+        val = row.iloc[col_val_idx] if len(row) > col_val_idx else None
         for cas in extract_cas(cas_text): source_data[cas] = val
         
     for r in range(1, ws.max_row + 1):
@@ -370,20 +382,32 @@ def logic_hp_26(input_df, template_path, customer_name, product_name):
         for cell in row: 
             if not isinstance(cell, MergedCell): cell.value = None
             
-    is_new_format = False
-    if not input_df.empty:
-        if any("Ref. No" in str(col) for col in input_df.columns) or any("Ref. No" in str(val) for val in input_df.iloc[:, 0].head(20)):
-            is_new_format = True
+    col_cas_idx, col_val_idx = None, None
+    for c_idx, col_name in enumerate(input_df.columns):
+        clean_text = str(col_name).upper().replace('\n', '').replace('\r', '').replace('\xa0', '').replace(' ', '')
+        if col_cas_idx is None and "CAS" in clean_text: col_cas_idx = c_idx
+        if col_val_idx is None and "TOTALINFRAGRANCEOIL(%)" in clean_text: col_val_idx = c_idx
+        
+    if col_cas_idx is None or col_val_idx is None:
+        for r_idx in range(min(len(input_df), 100)):
+            for c_idx in range(len(input_df.columns)):
+                clean_text = str(input_df.iat[r_idx, c_idx]).upper().replace('\n', '').replace('\r', '').replace('\xa0', '').replace(' ', '')
+                if col_cas_idx is None and "CAS" in clean_text: col_cas_idx = c_idx
+                if col_val_idx is None and "TOTALINFRAGRANCEOIL(%)" in clean_text: col_val_idx = c_idx
+            if col_cas_idx is not None and col_val_idx is not None: break
+
+    if col_cas_idx is None or col_val_idx is None:
+        is_new_format = False
+        if not input_df.empty:
+            if any("Ref. No" in str(col) for col in input_df.columns) or any("Ref. No" in str(val) for val in input_df.iloc[:, 0].head(20)):
+                is_new_format = True
+        if col_cas_idx is None: col_cas_idx = 2 if is_new_format else 1
+        if col_val_idx is None: col_val_idx = 3 if is_new_format else 2
 
     source_data = {}
     for idx, row in input_df.iterrows():
-        if is_new_format:
-            cas_text = row.iloc[2] if len(row) > 2 else None
-            val = row.iloc[3] if len(row) > 3 else None
-        else:
-            cas_text = row.iloc[1] if len(row) > 1 else None
-            val = row.iloc[2] if len(row) > 2 else None
-            
+        cas_text = row.iloc[col_cas_idx] if len(row) > col_cas_idx else None
+        val = row.iloc[col_val_idx] if len(row) > col_val_idx else None
         for cas in extract_cas(cas_text): source_data[cas] = val
         
     for r in range(1, ws.max_row + 1):
