@@ -256,9 +256,37 @@ def extract_cas(text):
     clean_text = str(text).replace('/', ' ').replace('\n', ' ').replace('\r', ' ')
     return re.findall(r'\d{2,7}-\d{2}-\d', clean_text)
 
+
+def restore_company_address(ws):
+    """openpyxl 저장 시 소실되는 텍스트 상자(회사 주소)를 기존 서식과 완벽히 동일하게 셀에 복원합니다."""
+    addr_font = Font(name='Arial', size=9)
+    addr_align = Alignment(horizontal='left', vertical='center')
+    
+    # 병합 해제 및 안전한 값 기입을 위해 예외 처리 병행
+    for r, text in [(3, "1301, Ace Gwanggyo Tower 2, 91, Chang Yong Dae-ro 256, Young Tong-Goo, Soowon-Si, South Korea"),
+                    (4, "TEL: +82(0)31-8014-2626 FAX: +82(0)31-8014-2629")]:
+        cell = ws.cell(row=r, column=4) # D열(4번째)에 기입
+        try: 
+            cell.value = text
+        except AttributeError:
+            try:
+                for rng in list(ws.merged_cells.ranges):
+                    if cell.coordinate in rng:
+                        ws.unmerge_cells(str(rng))
+                        cell = ws.cell(row=r, column=4)
+                        break
+                cell.value = text
+            except: pass
+        
+        cell.font = addr_font
+        cell.alignment = addr_align
+
+
 def logic_cff_83(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
+    restore_company_address(ws) # 텍스트 상자 소실 방어 로직 추가
+    
     for row in ws.iter_rows(min_col=3, max_col=3, min_row=1):
         for cell in row:
             if not isinstance(cell, MergedCell) and str(cell.value).startswith('='): cell.value = None
@@ -284,6 +312,8 @@ def logic_cff_83(input_df, template_path, customer_name, product_name):
 def logic_cff_26(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
+    restore_company_address(ws) # 텍스트 상자 소실 방어 로직 추가
+    
     for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=43):
         for cell in row: 
             if not isinstance(cell, MergedCell): cell.value = None
@@ -329,6 +359,8 @@ def logic_cff_26(input_df, template_path, customer_name, product_name):
 def logic_hp_83(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
+    restore_company_address(ws) # 텍스트 상자 소실 방어 로직 추가
+    
     for row in ws.iter_rows(min_col=3, max_col=3, min_row=1):
         for cell in row:
             if not isinstance(cell, MergedCell) and str(cell.value).startswith('='): cell.value = None
@@ -378,6 +410,8 @@ def logic_hp_83(input_df, template_path, customer_name, product_name):
 def logic_hp_26(input_df, template_path, customer_name, product_name):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
+    restore_company_address(ws) # 텍스트 상자 소실 방어 로직 추가
+    
     for row in ws.iter_rows(min_col=3, max_col=3, min_row=18, max_row=43):
         for cell in row: 
             if not isinstance(cell, MergedCell): cell.value = None
