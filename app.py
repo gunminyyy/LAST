@@ -946,25 +946,41 @@ def extract_section_smart(all_lines, start_kw, end_kw, mode="CFF(K)"):
     return final_text
 
 def parse_sec8_hp_content(text, mode="HP(K)"):
-    if not text or "자료없음" in text: return "자료없음"
+    if not text or text.strip() == "자료없음": return "자료없음"
     valid_lines = []
     
-    # 하이픈(-)으로 split하는 로직이 화학물질명(O-T-BUTYL 등) 내부의 하이픈까지 끊어버려 T, 3 등의 엉뚱한 값을 추출하던 문제 해결
-    lines_to_parse = text.split("\n")
+    # 1단계: 텍스트 추출 시 한 줄로 병합된 항목들을 완벽하게 분리하는 정규식
+    # [물질명] : (값) 패턴을 찾되, 다음 [물질명] : 이 오거나 문장이 끝날 때까지를 하나의 값으로 인식합니다.
+    # re.DOTALL을 추가하여 값 내부에 줄바꿈이 있어도 정상적으로 묶어서 추출합니다.
+    pattern = r'\[([^\]]+)\]\s*:\s*(.*?)(?=\s*\[[^\]]+\]\s*:|$)'
+    matches = re.findall(pattern, text, re.DOTALL)
     
-    for chunk in lines_to_parse:
-        clean_chunk = chunk.strip()
-        clean_chunk = re.sub(r'^[○\-\•]\s*', '', clean_chunk) # 앞의 불필요한 기호 제거
-        if not clean_chunk or "국내노출기준" in clean_chunk or "ACGIH" in clean_chunk or "생물학적" in clean_chunk: continue
-        
-        if ":" in clean_chunk:
-            parts = clean_chunk.split(":", 1)
-            name_part, value_part = parts[0].strip(), parts[1].strip()
-            if any(x in value_part for x in ["해당없음", "자료없음"]): continue 
-            valid_lines.append(f"{name_part.replace('[', '').replace(']', '').strip()} : {value_part.replace('[', '').replace(']', '').strip()}")
-        elif not any(x in clean_chunk for x in ["해당없음", "자료없음"]):
-            valid_lines.append(clean_chunk.replace("[", "").replace("]", "").strip())
+    if matches:
+        # 대괄호 패턴으로 항목들이 잘 찾아진 경우
+        for name, value in matches:
+            val_clean = value.strip()
+            # 혹시 값 뒤에 불필요한 하이픈(-)이나 기호가 남아있다면 제거
+            val_clean = re.sub(r'\s*[-○•]\s*$', '', val_clean).strip()
             
+            if not any(x in val_clean for x in ["해당없음", "자료없음"]):
+                valid_lines.append(f"{name.strip()} : {val_clean.replace('[', '').replace(']', '').strip()}")
+    else:
+        # 2단계: 대괄호 패턴이 없거나 정규식으로 매칭되지 않은 예외적인 경우 기존 줄바꿈 로직 수행
+        lines_to_parse = text.split("\n")
+        
+        for chunk in lines_to_parse:
+            clean_chunk = chunk.strip()
+            clean_chunk = re.sub(r'^[○\-\•]\s*', '', clean_chunk)
+            if not clean_chunk or "국내노출기준" in clean_chunk or "ACGIH" in clean_chunk or "생물학적" in clean_chunk: continue
+            
+            if ":" in clean_chunk:
+                parts = clean_chunk.split(":", 1)
+                name_part, value_part = parts[0].strip(), parts[1].strip()
+                if any(x in value_part for x in ["해당없음", "자료없음"]): continue 
+                valid_lines.append(f"{name_part.replace('[', '').replace(']', '').strip()} : {value_part.replace('[', '').replace(']', '').strip()}")
+            elif not any(x in clean_chunk for x in ["해당없음", "자료없음"]):
+                valid_lines.append(clean_chunk.replace("[", "").replace("]", "").strip())
+                
     return "\n".join(valid_lines) if valid_lines else "자료없음"
 
 def parse_pdf_final(doc, mode="CFF(K)"):
@@ -1705,7 +1721,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 
                 if option == "HP(K)" and refractive_index_input: safe_write_force(dest_ws, 588, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
                 else:
-                    r_match = re.search(r'([\d\.]+)', s9.get["B182"].replace("(20℃)", ""))
+                    r_match = re.search(r'([\d\.]+)', s9.get("B182"].replace("(20℃)", ""))
                     safe_write_force(dest_ws, 588, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
 
                 for sr, er, ck in [(601, 800, 'F'), (802, 1001, 'G'), (1003, 1202, 'H'), (1218, 1417, 'P'), (1419, 1618, 'Q'), (1624, 1823, 'T'), (1825, 2024, 'U'), (2026, 2225, 'V')]:
@@ -2376,3 +2392,8 @@ if ready:
             st.error(f"{idx+1}번 처리 오류: {e}")
 else:
     st.info("검토할 파일들을 모두 업로드해 주세요.")
+
+//내가 요청한 것만 타켓팅해서 수정하고 나머지 코드는 절대 건드리지 말고 유지해.
+
+MSDS 양식 변환 모드 중에 영문모드 (E) 모드들 (HP, CFF) 로 변환했을때 영문 양식의 3. Composition 에서 원래 함유량이 1~5 였으면 0~5 로 변경되서 양식에 들어갈 수 있게 수정해줘. 
+참고로 국문 (K) 로 변환할 때는 현재 1~5 면 0~5로 잘 바뀌어서 들어가고 있어.
