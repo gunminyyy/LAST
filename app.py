@@ -1077,7 +1077,7 @@ def parse_pdf_final(doc, mode="CFF(K)"):
             "B126": extract_section_smart(all_lines, "4.2 In case of eye contact", "4.3 In case of skin contact", mode),
             "B127": extract_section_smart(all_lines, "4.3 In case of skin contact", "4.4 If inhaled", mode),
             "B128": extract_section_smart(all_lines, "4.4 If inhaled", "4.5 If swallowed", mode),
-            "B129": extract_section_smart(all_lines, "4.5 If swallowed", ["4.6 Special note for doctors", "5. Firefighting measures", "5. FIREFIGHTING"], mode).replace("Medical personnel, and to ensure that take protection measures is recognized for its substance", ""),
+            "B129": extract_section_smart(all_lines, "4.5 If swallowed", ["4.6 Special note for doctors", "5. Firefighting measures", "5. FIREFIGHTING"], mode),
             "B132": extract_section_smart(all_lines, "5.1 Extinguishing media", "5.2 Special hazards", mode),
             "B134": extract_section_smart(all_lines, "5.2 Special hazards", "5.3 Advice for firefighters", mode).replace("substance or mixture", ""),
             "B136": extract_section_smart(all_lines, "5.3 Advice for firefighters", "6. Accidental", mode),
