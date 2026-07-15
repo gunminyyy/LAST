@@ -2254,7 +2254,7 @@ st.markdown("<br><br><br><hr style='border: 3px solid #ddd;'><br><br>", unsafe_a
 st.title("📄 ALLERGENS 자료 통합 검토 시스템(HP/CFF)")
 
 mode_review = st.radio("검토 방식 선택", ["원본 vs 83알러지", "원본 vs 26알러지", "83알러지 vs 26알러지", "원본 vs 83알러지 vs 26알러지"], horizontal=True, key="review_mode")
-st.info("파일들을 **동일한 순번**으로 배치하세요. 동일 순번끼리 매칭되어 검토합니다.")
+st.info("동시에 2개 이상의 자료를 검토할 경우, 같은 제품의 파일은 **동일한 순번**으로 배치하세요. 동일 순번끼리 매칭되어 검토합니다.")
 st.markdown("---")
 
 files_A, files_B, files_C = [], [], []
