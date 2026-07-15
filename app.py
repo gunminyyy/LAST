@@ -1705,7 +1705,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 
                 if option == "HP(K)" and refractive_index_input: safe_write_force(dest_ws, 588, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
                 else:
-                    r_match = re.search(r'([\d\.]+)', s9.get("B182"].replace("(20℃)", ""))
+                    r_match = re.search(r'([\d\.]+)', s9.get["B182"].replace("(20℃)", ""))
                     safe_write_force(dest_ws, 588, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
 
                 for sr, er, ck in [(601, 800, 'F'), (802, 1001, 'G'), (1003, 1202, 'H'), (1218, 1417, 'P'), (1419, 1618, 'Q'), (1624, 1823, 'T'), (1825, 2024, 'U'), (2026, 2225, 'V')]:
