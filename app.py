@@ -949,11 +949,14 @@ def parse_sec8_hp_content(text, mode="HP(K)"):
     if not text or "자료없음" in text: return "자료없음"
     valid_lines = []
     
-    lines_to_parse = text.split("-") if "HP" in mode else text.split("\n")
+    # 하이픈(-)으로 split하는 로직이 화학물질명(O-T-BUTYL 등) 내부의 하이픈까지 끊어버려 T, 3 등의 엉뚱한 값을 추출하던 문제 해결
+    lines_to_parse = text.split("\n")
     
     for chunk in lines_to_parse:
         clean_chunk = chunk.strip()
-        if not clean_chunk: continue
+        clean_chunk = re.sub(r'^[○\-\•]\s*', '', clean_chunk) # 앞의 불필요한 기호 제거
+        if not clean_chunk or "국내노출기준" in clean_chunk or "ACGIH" in clean_chunk or "생물학적" in clean_chunk: continue
+        
         if ":" in clean_chunk:
             parts = clean_chunk.split(":", 1)
             name_part, value_part = parts[0].strip(), parts[1].strip()
@@ -1702,7 +1705,7 @@ def process_msds(uploaded_files, product_name_input, option, refractive_index_in
                 
                 if option == "HP(K)" and refractive_index_input: safe_write_force(dest_ws, 588, 2, f"{refractive_index_input.strip()} ± 0.005", center=False)
                 else:
-                    r_match = re.search(r'([\d\.]+)', s9["B182"].replace("(20℃)", ""))
+                    r_match = re.search(r'([\d\.]+)', s9.get("B182"].replace("(20℃)", ""))
                     safe_write_force(dest_ws, 588, 2, f"{r_match.group(1)} ± 0.005" if r_match else "", center=False)
 
                 for sr, er, ck in [(601, 800, 'F'), (802, 1001, 'G'), (1003, 1202, 'H'), (1218, 1417, 'P'), (1419, 1618, 'Q'), (1624, 1823, 'T'), (1825, 2024, 'U'), (2026, 2225, 'V')]:
