@@ -2167,19 +2167,35 @@ with col5_1:
     
     template_dir = get_resource_path("OTHERS templates")
     
-    # 새롭게 추가된 11개의 템플릿 목록 명시 (첨부된 10개 양식 + STH VOC STATEMENT)
+    # 새롭게 추가된 7개를 포함한 총 18종 이상의 템플릿 목록 명시
+    # (포함/미포함 양식이 위아래로 나란히 정렬되도록 순서 배치)
     expected_others = [
         "Natural Organic Index (ISO 16128).docx",
+        "BSE FREE CERTIFICATE.docx",
         "BSE TSE FREE CERTIFICATE.docx",
         "CLP REGULATION CERTIFICATE.docx",
+        "CMR STATEMENT(포함).docx",
+        "CMR STATEMENT(미포함).docx",
         "CMR STATEMENT.docx",
+        "FUROCOUMARINS CERTIFICATE.docx",
         "GLUTEN FREE CERTIFICATE.docx",
+        "HELIOTROPINE CERTIFICATE.docx",
         "IMPURITY CERTIFICATE.docx",
+        "KARANAL CERTIFICATE.docx",
+        "METHYL SALICYLATE CERTIFICATE.docx",
+        "Methyl-N-Methylanthranilate CERTIFICATE.docx",
         "NANOMATERIAL CERTIFICATE.docx",
-        "TSCA COMPLIANCE STATEMENT CERTIFICATE.docx",
+        "NITRO MUSK CERTIFICATE(포함).docx",
+        "NITRO MUSKS CERTIFICATE(포함).docx",
+        "NITRO MUSK CERTIFICATE(미포함).docx",
+        "NITRO MUSKS CERTIFICATE(미포함).docx",
         "NITRO MUSKS CERTIFICATE.docx",
+        "RSPO CERTIFICATE(포함).docx",
+        "RSPO CERTIFICATE(미포함).docx",
         "RSPO CERTIFICATE.docx",
-        "STH VOC STATEMENT.docx"
+        "TSCA COMPLIANCE STATEMENT.docx",
+        "TSCA COMPLIANCE STATEMENT CERTIFICATE.docx",
+        "VOC STATEMENT.docx"
     ]
     
     available_others = []
@@ -2187,14 +2203,16 @@ with col5_1:
         # 폴더 내 실제 존재하는 .docx 파일들만 추출
         actual_files = [f for f in os.listdir(template_dir) if f.endswith(".docx") and not f.startswith("~")]
         
-        # 파일명에 빗금(/) 등을 쓰지 못해 언더바(_) 등으로 저장했을 경우를 유연하게 대비하여 동적 매칭
-        # 명시된 11개 양식을 우선적으로 화면에 배치
+        # 명시된 양식을 우선적으로 화면에 배치 (포함/미포함 등 세부 양식 간섭 방지 처리)
         for expected in expected_others:
-            # 띄어쓰기, 대소문자, 특수문자 차이를 무시하고 매칭 지원
+            # 띄어쓰기, 괄호, 특수문자 차이를 무시하고 매칭 지원
             exp_clean = expected.replace(".docx", "").replace(" ", "").replace("/", "").replace("_", "").lower()
-            match = next((f for f in actual_files if exp_clean in f.replace(".docx", "").replace(" ", "").replace("_", "").lower()), None)
-            if match and match not in available_others:
-                available_others.append(match)
+            
+            # actual_files 중 조건에 맞는 모든 파일을 찾아서 순서대로 넣음
+            for f in actual_files:
+                f_clean = f.replace(".docx", "").replace(" ", "").replace("_", "").lower()
+                if exp_clean in f_clean and f not in available_others:
+                    available_others.append(f)
                 
         # 리스트에 없는 나머지 기타 양식 템플릿이 폴더에 있을 경우 뒤에 이어서 추가
         available_others += sorted([f for f in actual_files if f not in available_others])
@@ -2205,7 +2223,7 @@ with col5_1:
             if st.checkbox(f.replace(".docx", ""), key=f"chk_other_{i}"):
                 selected_others.append(f)
     else:
-        st.warning("OTHERS templates 폴더에 변환 가능한 파일이 없습니다. 지정된 11개의 양식 파일을 폴더에 넣어주세요.")
+        st.warning("OTHERS templates 폴더에 변환 가능한 파일이 없습니다. 지정된 양식 파일들을 폴더에 넣어주세요.")
 
 with col5_2:
     st.subheader(" ")
