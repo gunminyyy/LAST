@@ -1964,6 +1964,7 @@ def process_others(customer_name, product_name, selected_files):
     """
     선택된 기타 양식(.docx) 템플릿들에 고객사, 제품명, 날짜를 입력하고
     하나의 ZIP 파일로 압축하여 반환하는 함수입니다.
+    새롭게 추가된 STH VOC STATEMENT 등 11개 양식을 포함하여 모두 유연하게 처리합니다.
     """
     try:
         zip_buffer = io.BytesIO()
@@ -1993,6 +1994,7 @@ def process_others(customer_name, product_name, selected_files):
                 doc_io.seek(0)
                 
                 # 제품명이 포함된 새로운 파일명으로 ZIP 안에 추가
+                # STH 접두사가 있는 양식(예: STH VOC STATEMENT.docx)은 제품명으로 치환
                 if "STH" in file_name:
                     output_name = file_name.replace("STH", product_name)
                 else:
@@ -2164,9 +2166,38 @@ with col5_1:
     st.info("이 양식은 원본 파일 첨부가 필요 없으며, 입력한 고객사명과 제품명만 참고하여 선택한 파일들이 ZIP 형식으로 일괄 생성됩니다.")
     
     template_dir = get_resource_path("OTHERS templates")
+    
+    # 새롭게 추가된 11개의 템플릿 목록 명시 (첨부된 10개 양식 + STH VOC STATEMENT)
+    expected_others = [
+        "Natural Organic Index (ISO 16128).docx",
+        "BSE TSE FREE CERTIFICATE.docx",
+        "CLP REGULATION CERTIFICATE.docx",
+        "CMR STATEMENT.docx",
+        "GLUTEN FREE CERTIFICATE.docx",
+        "IMPURITY CERTIFICATE.docx",
+        "NANOMATERIAL CERTIFICATE.docx",
+        "TSCA COMPLIANCE STATEMENT CERTIFICATE.docx",
+        "NITRO MUSKS CERTIFICATE.docx",
+        "RSPO CERTIFICATE.docx",
+        "STH VOC STATEMENT.docx"
+    ]
+    
     available_others = []
     if os.path.exists(template_dir):
-        available_others = sorted([f for f in os.listdir(template_dir) if f.endswith(".docx") and not f.startswith("~")])
+        # 폴더 내 실제 존재하는 .docx 파일들만 추출
+        actual_files = [f for f in os.listdir(template_dir) if f.endswith(".docx") and not f.startswith("~")]
+        
+        # 파일명에 빗금(/) 등을 쓰지 못해 언더바(_) 등으로 저장했을 경우를 유연하게 대비하여 동적 매칭
+        # 명시된 11개 양식을 우선적으로 화면에 배치
+        for expected in expected_others:
+            # 띄어쓰기, 대소문자, 특수문자 차이를 무시하고 매칭 지원
+            exp_clean = expected.replace(".docx", "").replace(" ", "").replace("/", "").replace("_", "").lower()
+            match = next((f for f in actual_files if exp_clean in f.replace(".docx", "").replace(" ", "").replace("_", "").lower()), None)
+            if match and match not in available_others:
+                available_others.append(match)
+                
+        # 리스트에 없는 나머지 기타 양식 템플릿이 폴더에 있을 경우 뒤에 이어서 추가
+        available_others += sorted([f for f in actual_files if f not in available_others])
     
     selected_others = []
     if available_others:
@@ -2174,7 +2205,7 @@ with col5_1:
             if st.checkbox(f.replace(".docx", ""), key=f"chk_other_{i}"):
                 selected_others.append(f)
     else:
-        st.warning("OTHERS templates 폴더에 변환 가능한 파일이 없습니다.")
+        st.warning("OTHERS templates 폴더에 변환 가능한 파일이 없습니다. 지정된 11개의 양식 파일을 폴더에 넣어주세요.")
 
 with col5_2:
     st.subheader(" ")
